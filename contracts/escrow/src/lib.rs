@@ -85,6 +85,10 @@ pub struct Proposal {
     pub expires_at: u64,
 }
 
+/// Current storage schema version. When a breaking storage layout change is
+/// introduced, add a migration path from the prior version to this version.
+const STORAGE_SCHEMA_VERSION: u32 = 1;
+
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
 #[contracttype]
@@ -97,13 +101,10 @@ pub enum DataKey {
     Cancelled,
     Expired,
     GiftId,
+    /// Version marker for storage layout migrations.
+    SchemaVersion,
+    /// Flag to temporarily pause new gift creation.
     Paused,
-    /// Vec<Address> — the M-of-N signer set for admin ops.
-    Signers,
-    /// u32 — minimum approvals required to execute an admin op.
-    Threshold,
-    /// The single pending proposal (only one active at a time).
-    Proposal,
 }
 
 #[contracttype]
@@ -213,8 +214,7 @@ impl EscrowContract {
         env.storage().instance().set(&DataKey::Claimed, &false);
         env.storage().instance().set(&DataKey::Cancelled, &false);
         env.storage().instance().set(&DataKey::Expired, &false);
-        env.storage().instance().set(&DataKey::Signers, &signers);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage().instance().set(&DataKey::SchemaVersion, &STORAGE_SCHEMA_VERSION);
 
         let ttl = required_ttl_ledgers(&env, unlock_time);
         env.storage().instance().extend_ttl(MIN_TTL_THRESHOLD, ttl);
@@ -244,7 +244,7 @@ impl EscrowContract {
         let claimed: bool = env
             .storage()
             .persistent()
-            .get(&PersistentKey::Claimed)
+            .get(&DataKey::Claimed)
             .unwrap_or(false);
         if claimed {
             return Err(EscrowError::AlreadyClaimed);
@@ -284,7 +284,11 @@ impl EscrowContract {
             .get(&DataKey::GiftId)
             .ok_or(EscrowError::NotInitialized)?;
 
-        env.storage().persistent().set(&PersistentKey::Claimed, &true);
+        // Effects before interactions (reentrancy guard)
+        env.storage().persistent().set(&DataKey::Claimed, &true);
+
+        // Extend TTL so the claimed state stays readable for reconciliation.
+        // unlock_time is in the past here, so required_ttl_ledgers returns BUFFER_LEDGERS.
         env.storage()
             .instance()
             .extend_ttl(MIN_TTL_THRESHOLD, POST_CLAIM_TTL_LEDGERS);
@@ -455,23 +459,55 @@ impl EscrowContract {
         let claimed: bool = env
             .storage()
             .persistent()
-            .get(&PersistentKey::Claimed)
+            .get(&DataKey::Claimed)
             .unwrap_or(false);
 
         Ok((recipient, amount, unlock_time, claimed))
     }
 
-    pub fn is_paused(env: Env) -> bool {
+    /// Migrate on-chain storage when upgrading to a new contract layout.
+    ///
+    /// If `initialize` already wrote `SchemaVersion` then the contract state is
+    /// already up-to-date and this call is a no-op.
+    pub fn migrate(env: Env) -> Result<(), EscrowError> {
+        let current_version: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SchemaVersion)
+            .unwrap_or(0);
+
+        if current_version >= STORAGE_SCHEMA_VERSION {
+            return Ok(());
+        }
+
+        // Migration path from v0 -> v1. This can be extended for future layouts.
+        if current_version == 0 {
+            let paused: bool = env
+                .storage()
+                .instance()
+                .get(&DataKey::Paused)
+                .unwrap_or(false);
+            env.storage().instance().set(&DataKey::Paused, &paused);
+        }
+
         env.storage()
             .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false)
+            .set(&DataKey::SchemaVersion, &STORAGE_SCHEMA_VERSION);
+
+        env.events().publish(
+            (Symbol::new(&env, "migrated"),),
+            (current_version, STORAGE_SCHEMA_VERSION, env.ledger().timestamp()),
+        );
+
+        Ok(())
     }
 
-    // ── Permissionless TTL keeper ─────────────────────────────────────────────
-
-    pub fn extend_ttl(env: Env) -> Result<(), EscrowError> {
-        let unlock_time: u64 = env
+    /// Upgrade the contract WASM. Restricted to the admin address stored at initialization.
+    ///
+    /// Emits an `upgraded` event containing the new WASM hash so off-chain
+    /// indexers can track contract versions.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), EscrowError> {
+        let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::UnlockTime)
@@ -521,15 +557,9 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Approve the current pending proposal. When approvals reach the threshold
-    /// the operation is executed immediately.
-    pub fn approve_admin_op(
-        env: Env,
-        approver: Address,
-    ) -> Result<(), EscrowError> {
-        require_signer(&env, &approver)?;
-
-        let mut proposal: Proposal = env
+    /// Pause new gift creation. Restricted to admin.
+    pub fn pause(env: Env) {
+        let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Proposal)
