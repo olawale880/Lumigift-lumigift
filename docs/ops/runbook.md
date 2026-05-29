@@ -55,11 +55,26 @@ This runbook provides procedures for handling common production incidents in Lum
 - User payments stuck in "processing" state
 
 ### Diagnosis Steps
-1. Check Redis instance status in cloud provider
-2. Test connectivity: `redis-cli -h $REDIS_HOST -p $REDIS_PORT ping`
-3. Check Redis memory usage: `redis-cli info memory`
-4. Verify AOF persistence status: `redis-cli info persistence`
-5. Check for long-running Lua scripts: `redis-cli script kill` (if applicable)
+1. **Check Sentinel status & master:**
+   ```bash
+   redis-cli -h $SENTINEL_HOST -p 26379 sentinel get-master-addr-by-name mymaster
+   ```
+2. **Check for failover events in logs:**
+   ```bash
+   docker compose logs redis-sentinel-1
+   ```
+3. **Test connectivity to current master:**
+   ```bash
+   redis-cli -h $REDIS_MASTER_HOST -p 6379 ping
+   ```
+4. **Check Redis node memory usage:**
+   ```bash
+   redis-cli -h $REDIS_NODE_HOST -p 6379 info memory
+   ```
+5. **Verify AOF persistence status:**
+   ```bash
+   redis-cli -h $REDIS_NODE_HOST -p 6379 info persistence
+   ```
 
 ### Resolution Steps
 1. **Redis Instance Down**:
