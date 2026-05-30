@@ -49,7 +49,7 @@ describe("POST /api/payments (Paystack webhook)", () => {
     mockGet.mockReset();
     mockSet.mockReset();
     mockUpdateGiftStatus.mockReset();
-    ({ POST } = await import("@/app/api/payments/route"));
+    ({ POST } = await import("@/app/api/v1/payments/route"));
   });
 
   it("returns 401 for invalid signature", async () => {

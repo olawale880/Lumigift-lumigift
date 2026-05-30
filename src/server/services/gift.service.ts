@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { Gift, GiftStatus } from "@/types";
 import type { CreateGiftInput } from "@/types/schemas";
 import { initializePayment, ngnToKobo } from "@/lib/paystack";
+import { createCheckoutSession } from "@/lib/stripe";
 import { serverConfig } from "@/server/config";
 import { assertValidTransition } from "./gift-state-machine";
 
@@ -39,15 +40,34 @@ export async function createGift(
 
   gifts.set(id, gift);
 
-  const payment = await initializePayment({
-    email: `${senderId}@lumigift.app`, // placeholder; use real email from user record
-    amountKobo: ngnToKobo(input.amountNgn),
-    reference: `lumigift_${id}`,
-    callbackUrl: `${serverConfig.app.url}/api/payments/callback?giftId=${id}`,
-    metadata: { giftId: id, senderId },
-  });
+  let paymentUrl: string;
+  const reference = `lumigift_${id}`;
+  const email = `${senderId}@lumigift.app`; // placeholder; use real email from user record
 
-  return { gift, paymentUrl: payment.authorizationUrl };
+  if (input.paymentProvider === "stripe") {
+    const amountUsd = parseFloat(amountUsdc);
+    const session = await createCheckoutSession({
+      email,
+      amountCents: Math.round(amountUsd * 100),
+      currency: "usd",
+      reference,
+      successUrl: `${serverConfig.app.url}/dashboard?status=success&giftId=${id}`,
+      cancelUrl: `${serverConfig.app.url}/send?status=cancelled&giftId=${id}`,
+      metadata: { giftId: id, senderId },
+    });
+    paymentUrl = session.url;
+  } else {
+    const payment = await initializePayment({
+      email,
+      amountKobo: ngnToKobo(input.amountNgn),
+      reference,
+      callbackUrl: `${serverConfig.app.url}/api/payments/callback?giftId=${id}`,
+      metadata: { giftId: id, senderId },
+    });
+    paymentUrl = payment.authorizationUrl;
+  }
+
+  return { gift, paymentUrl };
 }
 
 export async function getGiftById(id: string): Promise<Gift | null> {
