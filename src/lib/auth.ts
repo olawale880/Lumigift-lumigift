@@ -9,6 +9,11 @@ import { getCountryFromIp } from "@/lib/device";
 import { createHash } from "crypto";
 import { normalizePhone } from "@/lib/phone";
 import { verifyOtp } from "@/lib/otp";
+import { 
+  createRefreshToken, 
+  rotateRefreshToken, 
+  revokeAllUserTokens 
+} from "@/server/services/token.service";
 
 function fingerprintFromHeaders(ua: string, lang: string, enc: string): string {
   return createHash("sha256").update(`${ua}|${lang}|${enc}`).digest("hex");
@@ -52,7 +57,10 @@ async function handleDeviceCheck(
 }
 
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
+  session: { 
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
   pages: {
     signIn: "/auth/login",
     error: "/auth/error",
@@ -68,13 +76,11 @@ export const authOptions: NextAuthOptions = {
         const parsed = verifyOtpSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        // parsed.data.phone is already E.164 (normalized by the Zod schema)
         const phone = normalizePhone(parsed.data.phone);
         if (!phone) return null;
 
         const result = await verifyOtp(phone, parsed.data.otp);
         if (!result.success) {
-          // Throw so NextAuth surfaces the message; locked === true means HTTP 429 semantics.
           throw new Error(result.message);
         }
 
@@ -85,7 +91,6 @@ export const authOptions: NextAuthOptions = {
         if (rows.length === 0) return null;
         const user = rows[0];
 
-        // Device fingerprint check
         try {
           const reqHeaders = headers();
           const ua = reqHeaders.get("user-agent") ?? "";
@@ -97,7 +102,6 @@ export const authOptions: NextAuthOptions = {
 
           await handleDeviceCheck(user.id, user.phone, fingerprint, ip);
         } catch (err) {
-          // Never block login due to device-check errors
           console.error("[auth] device check error:", err);
         }
 
@@ -107,18 +111,54 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
+      // Initial sign in
       if (user) {
-        token.id = user.id;
-        token.phone = (user as { phone?: string }).phone;
+        const refreshToken = await createRefreshToken(user.id);
+        return {
+          id: user.id,
+          phone: (user as { phone?: string }).phone,
+          accessTokenExpires: Date.now() + 15 * 60 * 1000, // 15 minutes
+          refreshToken,
+        };
       }
-      return token;
+
+      // Return previous token if the access token has not expired yet
+      if (Date.now() < (token.accessTokenExpires as number)) {
+        return token;
+      }
+
+      // Access token has expired, try to rotate the refresh token
+      console.log(`[auth] Rotating refresh token for user ${token.id}`);
+      const newToken = await rotateRefreshToken(
+        token.refreshToken as string,
+        token.id as string
+      );
+
+      if (!newToken) {
+        console.warn(`[auth] Refresh token rotation failed for user ${token.id}`);
+        return { ...token, error: "RefreshAccessTokenError" };
+      }
+
+      return {
+        ...token,
+        accessTokenExpires: Date.now() + 15 * 60 * 1000,
+        refreshToken: newToken,
+      };
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { id?: string }).id = token.id as string;
-        (session.user as { phone?: string }).phone = token.phone as string;
+        (session.user as any).id = token.id as string;
+        (session.user as any).phone = token.phone as string;
+        (session.user as any).error = token.error;
       }
       return session;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      if (token?.id) {
+        await revokeAllUserTokens(token.id as string);
+      }
     },
   },
 };
