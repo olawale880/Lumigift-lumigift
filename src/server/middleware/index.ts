@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { authOptions } from "@/lib/auth";
 import { ApiError } from "@/types";
 import { requestLogger, getCorrelationId } from "@/lib/logger";
+import { sanitizeObject } from "@/lib/sanitize";
 
 // Re-export CSRF middleware so callers can import from one place
 export { withCsrf } from "@/lib/csrf";
@@ -34,8 +35,23 @@ export function withErrorHandler(handler: Handler): Handler {
   return async (req, context) => {
     const correlationId = getCorrelationId(req.headers);
     const log = requestLogger(correlationId);
+
+    // Proxy the request to sanitize JSON body when accessed
+    const proxiedReq = new Proxy(req, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === "json" && typeof value === "function") {
+          return async () => {
+            const body = await value.apply(target);
+            return sanitizeObject(body);
+          };
+        }
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
     try {
-      const res = await handler(req, context);
+      const res = await handler(proxiedReq as NextRequest, context);
       res.headers.set("X-API-Version", API_VERSION);
       res.headers.set("x-correlation-id", correlationId);
       return res;
