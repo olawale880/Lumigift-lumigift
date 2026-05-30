@@ -1,3 +1,5 @@
+import { purgeOldAuditLogs } from "./audit.service";
+
 /**
  * Unlock scheduler — checks for gifts whose unlockAt has passed and
  * transitions them from "locked" → "unlocked", then notifies recipients.
@@ -44,4 +46,14 @@ export async function processExpiries(): Promise<void> {
   //   // Notify sender via SMS
   //   await sendSms(gift.senderPhone, `Your Lumigift of ${gift.amountUsdc} USDC has expired and been refunded.`);
   // }
+}
+
+/**
+ * Maintenance scheduler — handles log rotation, data retention policies,
+ * and other general cleanup tasks.
+ */
+export async function processCleanup(): Promise<{ purgedLogs: number }> {
+  const purgedLogs = await purgeOldAuditLogs();
+  console.log(`[scheduler] processCleanup: purged ${purgedLogs} old audit logs.`);
+  return { purgedLogs };
 }
