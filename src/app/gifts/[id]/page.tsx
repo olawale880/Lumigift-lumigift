@@ -8,11 +8,8 @@ interface Props {
 }
 
 async function fetchGift(id: string): Promise<Gift | null> {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${baseUrl}/api/v1/gifts/${id}`, {
-    cache: "no-store",
-  });
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const res = await fetch(`${baseUrl}/api/v1/gifts/${id}`, { cache: "no-store" });
   if (!res.ok) return null;
   const json = await res.json();
   return json.success ? (json.data as Gift) : null;
