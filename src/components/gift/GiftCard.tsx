@@ -8,6 +8,7 @@ import { GiftStatusBadge } from "@/components/ui/GiftStatusBadge";
 import { formatNGN } from "@/lib/currency";
 import { ClaimButton } from "./ClaimButton";
 import { ShareGift } from "./ShareGift";
+import { CancelGiftModal } from "./CancelGiftModal";
 import styles from "./GiftCard.module.css";
 
 interface GiftCardProps {
@@ -26,6 +27,7 @@ function explorerUrl(txHash: string) {
 export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardProps) {
   const router = useRouter();
   const [status, setStatus] = useState<GiftStatus>(gift.status);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const isLocked = status === "locked";
   const name =
     perspective === "sender" ? `To: ${gift.recipientName}` : "A gift for you";
@@ -130,9 +132,27 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
       )}
 
       {perspective === "sender" && (status === "locked" || status === "funded") && (
-        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <div
+          className={styles.actions}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           <ShareGift giftId={gift.id} recipientName={gift.recipientName} />
+          <button
+            className="btn btn--secondary btn--sm"
+            onClick={() => setShowCancelModal(true)}
+          >
+            Cancel
+          </button>
         </div>
+      )}
+
+      {showCancelModal && (
+        <CancelGiftModal
+          giftId={gift.id}
+          onClose={() => setShowCancelModal(false)}
+          onSuccess={() => setStatus("cancelled")}
+        />
       )}
     </article>
   );
