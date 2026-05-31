@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { OtpInput } from "@/components/auth/OtpInput";
+import { useCsrf } from "@/hooks/useCsrf";
 import styles from "./page.module.css";
 
 type Step = "phone" | "otp";
@@ -17,6 +19,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { csrfFetch } = useCsrf();
   const errorId = useId();
   const statusId = useId();
 
@@ -25,7 +28,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/auth/send-otp", {
+      const res = await csrfFetch("/api/v1/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
@@ -113,20 +116,11 @@ export default function LoginPage() {
               aria-label="OTP verification form"
               aria-describedby={`${statusId}-desc`}
             >
-              <Input
-                label="6-Digit Code"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                placeholder="123456"
+              <OtpInput
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                required
-                autoComplete="one-time-code"
-                aria-label="6-digit one-time password sent to your phone"
-                aria-describedby={error ? errorId : undefined}
+                onChange={setOtp}
                 error={error ?? undefined}
+                disabled={loading}
               />
               {/* Standalone error for the OTP step (also surfaced via Input's error prop above) */}
               {error && (
