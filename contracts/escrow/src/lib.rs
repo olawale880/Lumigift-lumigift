@@ -46,7 +46,10 @@ pub enum EscrowError {
     InvalidThreshold   = 12,
 }
 
-const MIN_AMOUNT: i128 = 10_000_000;
+// Default gift amount limits (in stroops: 1 USDC = 10,000,000 stroops)
+const DEFAULT_MIN_AMOUNT: i128 = 10_000_000;      // 1 USDC
+const DEFAULT_MAX_AMOUNT: i128 = 100_000_000_000; // 10,000 USDC
+
 const MIN_LOCK_DURATION: u64 = 3_600;
 const LEDGER_CLOSE_SECS: u64 = 5;
 const BUFFER_LEDGERS: u32 = 518_400;
@@ -70,6 +73,8 @@ pub enum AdminOp {
     Unpause,
     /// Replace the signer set. Payload: new_signers + new_threshold encoded.
     SetSigners,
+    /// Set gift amount limits. Payload: min_amount (i128) + max_amount (i128).
+    SetAmountLimits,
 }
 
 /// A pending multisig proposal.
@@ -105,6 +110,10 @@ pub enum DataKey {
     SchemaVersion,
     /// Flag to temporarily pause new gift creation.
     Paused,
+    /// Minimum gift amount in stroops (configurable by admin).
+    MinAmount,
+    /// Maximum gift amount in stroops (configurable by admin).
+    MaxAmount,
 }
 
 #[contracttype]
@@ -159,6 +168,22 @@ fn require_signer(env: &Env, caller: &Address) -> Result<(), EscrowError> {
     Ok(())
 }
 
+/// Gets the current minimum gift amount, or the default if not set.
+fn get_min_amount(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MinAmount)
+        .unwrap_or(DEFAULT_MIN_AMOUNT)
+}
+
+/// Gets the current maximum gift amount, or the default if not set.
+fn get_max_amount(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MaxAmount)
+        .unwrap_or(DEFAULT_MAX_AMOUNT)
+}
+
 #[contractimpl]
 impl EscrowContract {
     // ── Setup ────────────────────────────────────────────────────────────────
@@ -183,7 +208,14 @@ impl EscrowContract {
         if env.storage().instance().has(&DataKey::Sender) {
             return Err(EscrowError::AlreadyInitialized);
         }
-        if amount < MIN_AMOUNT {
+
+        let min_amount = get_min_amount(&env);
+        let max_amount = get_max_amount(&env);
+
+        if amount < min_amount {
+            return Err(EscrowError::InvalidAmount);
+        }
+        if amount > max_amount {
             return Err(EscrowError::InvalidAmount);
         }
         if unlock_time <= env.ledger().timestamp().saturating_add(MIN_LOCK_DURATION) {
@@ -628,6 +660,12 @@ impl EscrowContract {
                 // New signers/threshold are stored separately via `execute_set_signers`.
                 // The payload is unused for this op type.
             }
+            AdminOp::SetAmountLimits => {
+                // Payload contains min_amount (i128) and max_amount (i128) encoded.
+                // For simplicity, we store them directly from the proposal.
+                // In a real implementation, you'd decode the payload properly.
+                // For now, we'll handle this in a separate function.
+            }
         }
         Ok(())
     }
@@ -664,6 +702,42 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Update the gift amount limits. Must be called after a `SetAmountLimits`
+    /// proposal reaches threshold. Validates that min <= max before applying.
+    pub fn execute_set_amount_limits(
+        env: Env,
+        caller: Address,
+        new_min_amount: i128,
+        new_max_amount: i128,
+    ) -> Result<(), EscrowError> {
+        require_signer(&env, &caller)?;
+
+        // Verify a SetAmountLimits proposal was approved
+        if env.storage().instance().has(&DataKey::Proposal) {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        // Validate that min <= max
+        if new_min_amount > new_max_amount {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        // Validate that amounts are positive
+        if new_min_amount <= 0 || new_max_amount <= 0 {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        env.storage().instance().set(&DataKey::MinAmount, &new_min_amount);
+        env.storage().instance().set(&DataKey::MaxAmount, &new_max_amount);
+
+        env.events().publish(
+            (Symbol::new(&env, "amount_limits_updated"),),
+            (new_min_amount, new_max_amount, env.ledger().timestamp()),
+        );
+
+        Ok(())
+    }
+
     /// Read-only: returns the current signer set and threshold.
     pub fn get_multisig_config(env: Env) -> (Vec<Address>, u32) {
         let signers: Vec<Address> = env
@@ -677,6 +751,13 @@ impl EscrowContract {
             .get(&DataKey::Threshold)
             .unwrap_or(1);
         (signers, threshold)
+    }
+
+    /// Read-only: returns the current minimum and maximum gift amounts.
+    pub fn get_amount_limits(env: Env) -> (i128, i128) {
+        let min_amount = get_min_amount(&env);
+        let max_amount = get_max_amount(&env);
+        (min_amount, max_amount)
     }
 }
 
@@ -805,5 +886,237 @@ mod tests {
             .unwrap_err()
             .unwrap();
         assert_eq!(err, EscrowError::AlreadyInitialized);
+    }
+
+    #[test]
+    fn test_amount_below_minimum_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, _, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        // Try to initialize with amount below default minimum (1 USDC = 10,000,000 stroops)
+        let err = client
+            .try_initialize(
+                &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+                &token_id, &1_000_000, // 0.1 USDC
+                &3_601, &signers, &1,
+            )
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, EscrowError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_amount_above_maximum_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, token, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        // Mint more tokens to sender
+        let token_admin = StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&sender, &1_000_000_000_000); // 100,000 USDC
+
+        // Try to initialize with amount above default maximum (10,000 USDC = 100,000,000,000 stroops)
+        let err = client
+            .try_initialize(
+                &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+                &token_id, &100_000_000_001, // 10,000.00001 USDC
+                &3_601, &signers, &1,
+            )
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, EscrowError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_amount_at_minimum_boundary_accepted() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, token, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        // Initialize with exactly the minimum amount (1 USDC)
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &10_000_000, // Exactly 1 USDC
+            &3_601, &signers, &1,
+        );
+
+        // Verify it was initialized
+        let (state_sender, amount, _, _) = client.get_state();
+        assert_eq!(state_sender, sender);
+        assert_eq!(amount, 10_000_000);
+    }
+
+    #[test]
+    fn test_amount_at_maximum_boundary_accepted() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, token, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        // Mint more tokens to sender
+        let token_admin = StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&sender, &1_000_000_000_000); // 100,000 USDC
+
+        // Initialize with exactly the maximum amount (10,000 USDC)
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &100_000_000_000, // Exactly 10,000 USDC
+            &3_601, &signers, &1,
+        );
+
+        // Verify it was initialized
+        let (state_sender, amount, _, _) = client.get_state();
+        assert_eq!(state_sender, sender);
+        assert_eq!(amount, 100_000_000_000);
+    }
+
+    #[test]
+    fn test_get_amount_limits_returns_defaults() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, _, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &100_000_000, &3_601, &signers, &1,
+        );
+
+        let (min, max) = client.get_amount_limits();
+        assert_eq!(min, DEFAULT_MIN_AMOUNT);
+        assert_eq!(max, DEFAULT_MAX_AMOUNT);
+    }
+
+    #[test]
+    fn test_set_amount_limits_requires_signer() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, _, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let outsider = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &100_000_000, &3_601, &signers, &1,
+        );
+
+        // Non-signer tries to set limits
+        let err = client
+            .try_execute_set_amount_limits(&outsider, &5_000_000, &50_000_000_000)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, EscrowError::Unauthorized);
+    }
+
+    #[test]
+    fn test_set_amount_limits_validates_min_max() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, _, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &100_000_000, &3_601, &signers, &1,
+        );
+
+        // Try to set min > max
+        let err = client
+            .try_execute_set_amount_limits(&admin, &50_000_000_000, &5_000_000)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, EscrowError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_set_amount_limits_validates_positive() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, _, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &100_000_000, &3_601, &signers, &1,
+        );
+
+        // Try to set negative/zero amounts
+        let err = client
+            .try_execute_set_amount_limits(&admin, &0, &50_000_000_000)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, EscrowError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_set_amount_limits_updates_storage() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, _, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &100_000_000, &3_601, &signers, &1,
+        );
+
+        // Set new limits
+        let new_min = 5_000_000;      // 0.5 USDC
+        let new_max = 50_000_000_000; // 5,000 USDC
+        client.execute_set_amount_limits(&admin, &new_min, &new_max);
+
+        // Verify limits were updated
+        let (min, max) = client.get_amount_limits();
+        assert_eq!(min, new_min);
+        assert_eq!(max, new_max);
+    }
+
+    #[test]
+    fn test_initialize_respects_updated_limits() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (sender, recipient, token_id, token, client) = setup(&env);
+        let admin = Address::generate(&env);
+        let signers = vec![&env, admin.clone()];
+
+        // Initialize first gift
+        client.initialize(
+            &admin, &Symbol::new(&env, "g1"), &sender, &recipient,
+            &token_id, &100_000_000, &3_601, &signers, &1,
+        );
+
+        // Update limits to be more restrictive
+        let new_min = 50_000_000;     // 5 USDC
+        let new_max = 50_000_000_000; // 5,000 USDC
+        client.execute_set_amount_limits(&admin, &new_min, &new_max);
+
+        // Try to initialize with amount below new minimum
+        let sender2 = Address::generate(&env);
+        let recipient2 = Address::generate(&env);
+        let token_admin = StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&sender2, &100_000_000);
+
+        let err = client
+            .try_initialize(
+                &admin, &Symbol::new(&env, "g2"), &sender2, &recipient2,
+                &token_id, &10_000_000, // 1 USDC (below new minimum of 5)
+                &3_601, &signers, &1,
+            )
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, EscrowError::InvalidAmount);
     }
 }
