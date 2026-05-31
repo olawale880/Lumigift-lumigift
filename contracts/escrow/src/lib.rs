@@ -29,6 +29,7 @@ pub enum EscrowError {
     Unauthorized       = 5,
     AlreadyCancelled   = 6,
     InvalidAmount      = 7,
+    UnlockNotExtended  = 8,
 }
 
 /// Minimum escrow amount: 1 USDC expressed in stroops (7 decimal places).
@@ -174,6 +175,47 @@ impl EscrowContract {
             .unwrap_or(false);
 
         Ok((recipient, amount, unlock_time, claimed))
+    }
+
+    /// Extend the unlock date. Only the original sender may call this,
+    /// and `new_unlock_at` must be strictly later than the current unlock time.
+    pub fn extend_unlock(env: Env, new_unlock_at: u64) -> Result<(), EscrowError> {
+        let sender: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Sender)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        sender.require_auth();
+
+        let claimed: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Claimed)
+            .unwrap_or(false);
+
+        if claimed {
+            return Err(EscrowError::AlreadyClaimed);
+        }
+
+        let current_unlock: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::UnlockTime)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        if new_unlock_at <= current_unlock {
+            return Err(EscrowError::UnlockNotExtended);
+        }
+
+        env.storage().instance().set(&DataKey::UnlockTime, &new_unlock_at);
+
+        env.events().publish(
+            (Symbol::new(&env, "unlock_extended"),),
+            (sender, current_unlock, new_unlock_at),
+        );
+
+        Ok(())
     }
 }
 
@@ -328,6 +370,85 @@ mod tests {
             .unwrap_err()
             .unwrap();
         assert_eq!(err, EscrowError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_extend_unlock_valid() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let sender = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        let (token_id, _, token_admin) = create_token(&env, &sender);
+        token_admin.mint(&sender, &100_000_000);
+
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        client.initialize(&sender, &recipient, &token_id, &100_000_000, &1_000);
+        client.extend_unlock(&2_000);
+
+        let (_, _, unlock_time, _) = client.get_state();
+        assert_eq!(unlock_time, 2_000);
+    }
+
+    #[test]
+    fn test_extend_unlock_same_time_returns_error() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let sender = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        let (token_id, _, token_admin) = create_token(&env, &sender);
+        token_admin.mint(&sender, &100_000_000);
+
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        client.initialize(&sender, &recipient, &token_id, &100_000_000, &1_000);
+
+        let err = client.try_extend_unlock(&1_000).unwrap_err().unwrap();
+        assert_eq!(err, EscrowError::UnlockNotExtended);
+    }
+
+    #[test]
+    fn test_extend_unlock_earlier_time_returns_error() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let sender = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        let (token_id, _, token_admin) = create_token(&env, &sender);
+        token_admin.mint(&sender, &100_000_000);
+
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        client.initialize(&sender, &recipient, &token_id, &100_000_000, &1_000);
+
+        let err = client.try_extend_unlock(&500).unwrap_err().unwrap();
+        assert_eq!(err, EscrowError::UnlockNotExtended);
+    }
+
+    #[test]
+    fn test_extend_unlock_after_claim_returns_error() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let sender = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        let (token_id, _, token_admin) = create_token(&env, &sender);
+        token_admin.mint(&sender, &100_000_000);
+
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        client.initialize(&sender, &recipient, &token_id, &100_000_000, &1_000);
+        env.ledger().with_mut(|l| l.timestamp = 1_001);
+        client.claim();
+
+        let err = client.try_extend_unlock(&2_000).unwrap_err().unwrap();
+        assert_eq!(err, EscrowError::AlreadyClaimed);
     }
 }
 
