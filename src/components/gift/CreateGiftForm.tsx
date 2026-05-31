@@ -10,20 +10,21 @@ import styles from "./CreateGiftForm.module.css";
 
 export function CreateGiftForm() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isValid },
   } = useForm<CreateGiftInput>({
     resolver: zodResolver(createGiftSchema),
     defaultValues: { paymentProvider: "paystack" },
+    mode: "onBlur",
   });
 
   const onSubmit = async (data: CreateGiftInput) => {
     setLoading(true);
-    setError(null);
+    setSubmitError(null);
     try {
       const res = await fetch("/api/gifts", {
         method: "POST",
@@ -32,10 +33,9 @@ export function CreateGiftForm() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
-      // Redirect to Paystack payment page
       window.location.href = json.data.paymentUrl;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -44,6 +44,14 @@ export function CreateGiftForm() {
   return (
     <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
       <h2 className={styles.title}>Send a Gift</h2>
+
+      {/* ARIA live region announces field errors to screen readers */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {Object.values(errors)
+          .map((e) => e?.message)
+          .filter(Boolean)
+          .join(". ")}
+      </div>
 
       <Input
         label="Recipient's Name"
@@ -88,13 +96,19 @@ export function CreateGiftForm() {
           {...register("message")}
         />
         {errors.message && (
-          <span className="input-error-msg">{errors.message.message}</span>
+          <span id="message-error" className="input-error-msg" role="alert">
+            {errors.message.message}
+          </span>
         )}
       </div>
 
-      {error && <p className={styles.error}>{error}</p>}
+      {submitError && (
+        <p className={styles.error} role="alert">
+          {submitError}
+        </p>
+      )}
 
-      <Button type="submit" fullWidth loading={loading}>
+      <Button type="submit" fullWidth loading={loading} disabled={!isValid || loading}>
         Continue to Payment
       </Button>
     </form>
