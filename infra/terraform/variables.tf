@@ -47,3 +47,13 @@ variable "domain_name" {
   description = "Root domain name managed in Route 53 (e.g. lumigift.app)"
   type        = string
 }
+
+variable "github_oidc_provider_arn" {
+  description = "ARN of the GitHub Actions OIDC provider (created once per AWS account)"
+  type        = string
+}
+
+variable "ops_alert_email" {
+  description = "Email address for backup success/failure SNS alerts"
+  type        = string
+}
