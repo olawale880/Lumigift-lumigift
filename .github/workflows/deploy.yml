@@ -50,9 +50,26 @@ jobs:
       - run: npm ci
 
       - name: Run database migrations
-        run: npm run db:migrate
+        id: migrate
+        run: |
+          npm run db:migrate 2>&1 | tee migration.log
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Upload migration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-logs-${{ github.sha }}
+          path: migration.log
+          retention-days: 30
+
+      - name: Abort on migration failure
+        if: steps.migrate.outputs.exit_code != '0'
+        run: |
+          echo "::error::Database migration failed — aborting deployment. Check migration-logs artifact."
+          exit 1
 
       - name: Fill in the new image ID in the Amazon ECS task definition
         id: task-def
