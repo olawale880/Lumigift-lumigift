@@ -11,9 +11,9 @@ import { Modal } from "@/components/ui/Modal";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import { GiftPreview } from "./GiftPreview";
 import { VoiceNoteRecorder } from "./VoiceNoteRecorder";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useCsrf } from "@/hooks/useCsrf";
-import { formatNGN } from "@/lib/currency";
+import { formatNGN, formatUSDC } from "@/lib/currency";
 import styles from "./CreateGiftForm.module.css";
 
 const MESSAGE_MAX = 280;
@@ -26,6 +26,9 @@ export function CreateGiftForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usdcEquivalent, setUsdcEquivalent] = useState("…");
+  const [rateData, setRateData] = useState<{ ngnPerUsdc: number; lastUpdated: number } | null>(null);
+  const [fetchingRate, setFetchingRate] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
   const [showUnregisteredWarning, setShowUnregisteredWarning] = useState(false);
   const [recipientRegistered, setRecipientRegistered] = useState<boolean | null>(null);
   const [voiceNoteBlob, setVoiceNoteBlob] = useState<Blob | null>(null);
@@ -48,8 +51,45 @@ export function CreateGiftForm() {
 
   const recipientPhone = watch("recipientPhone");
   const watchedUnlockAt = watch("unlockAt");
+  const amountNgn = watch("amountNgn");
   const messageValue = watch("message") ?? "";
   const messageLength = messageValue.length;
+
+  const fetchRate = useCallback(async () => {
+    try {
+      setFetchingRate(true);
+      const res = await fetch("/api/v1/exchange-rate");
+      if (!res.ok) throw new Error("Failed to fetch rate");
+      const json = await res.json();
+      setRateData({
+        ngnPerUsdc: json.data.ngnPerUsdc,
+        lastUpdated: json.data.timestamp,
+      });
+      setRateError(null);
+    } catch (err) {
+      console.error("[CreateGiftForm] rate fetch error:", err);
+      setRateError("Unable to fetch live exchange rate");
+    } finally {
+      setFetchingRate(false);
+    }
+  }, []);
+
+  // Fetch rate on mount and every 60s
+  useEffect(() => {
+    fetchRate();
+    const interval = setInterval(fetchRate, 60000);
+    return () => clearInterval(interval);
+  }, [fetchRate]);
+
+  // Update USDC equivalent when amount or rate changes
+  useEffect(() => {
+    if (amountNgn && rateData?.ngnPerUsdc) {
+      const usdc = amountNgn / rateData.ngnPerUsdc;
+      setUsdcEquivalent(usdc.toFixed(2));
+    } else {
+      setUsdcEquivalent("…");
+    }
+  }, [amountNgn, rateData]);
 
   const handleVoiceNote = useCallback((blob: Blob | null) => {
     setVoiceNoteBlob(blob);
@@ -95,15 +135,8 @@ export function CreateGiftForm() {
         const url = await uploadVoiceNote();
         setVoiceNoteUrl(url);
       }
-
-      // GET — no CSRF needed
-      const res = await fetch(`/api/v1/exchange-rate?ngn=${data.amountNgn}`);
-      if (res.ok) {
-        const json = await res.json();
-        setUsdcEquivalent(json.data?.usdc ?? "—");
-      }
     } catch {
-      // non-critical — preview still shows without USDC estimate
+      // non-critical
     }
     setStep("preview");
   };
@@ -114,13 +147,6 @@ export function CreateGiftForm() {
       if (voiceNoteBlob) {
         const url = await uploadVoiceNote();
         setVoiceNoteUrl(url);
-      }
-      const data = getValues();
-      // GET — no CSRF needed
-      const res = await fetch(`/api/v1/exchange-rate?ngn=${data.amountNgn}`);
-      if (res.ok) {
-        const json = await res.json();
-        setUsdcEquivalent(json.data?.usdc ?? "—");
       }
     } catch {
       // non-critical
@@ -207,6 +233,22 @@ export function CreateGiftForm() {
           error={errors.amountNgn?.message}
           {...register("amountNgn", { valueAsNumber: true })}
         />
+
+        <div className={styles.conversion}>
+          {amountNgn > 0 && (
+            <div className={styles.conversionValue}>
+              ≈ {formatUSDC(usdcEquivalent)}
+              {fetchingRate && <span className={styles.refreshing}>⌛</span>}
+            </div>
+          )}
+          {rateData && (
+            <div className={styles.conversionRate}>
+              Rate: {formatNGN(rateData.ngnPerUsdc)}/USDC · Last updated {new Date(rateData.lastUpdated).toLocaleTimeString()}
+            </div>
+          )}
+          {rateError && <div className={styles.error}>{rateError}</div>}
+        </div>
+
         <p className="input-hint">
           Min {formatNGN(500)} · Max {formatNGN(500000)} · Daily limit {formatNGN(1000000)}
         </p>

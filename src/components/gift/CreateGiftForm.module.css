@@ -50,6 +50,37 @@
   margin-bottom: var(--space-2);
 }
 
+.conversion {
+  margin-top: calc(var(--space-1) * -1);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.conversionValue {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-medium);
+}
+
+.conversionRate {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.refreshing {
+  display: inline-block;
+  margin-left: var(--space-1);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
 .select {
   width: 100%;
   padding: var(--space-3) var(--space-4);
