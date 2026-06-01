@@ -1,6 +1,7 @@
 "use client";
 
 import { GiftCardSkeleton } from "@/components/gift/GiftCardSkeleton";
+import { OnboardingWrapper } from "@/components/onboarding/OnboardingWrapper";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -89,6 +90,7 @@ export default function DashboardPage() {
 
   return (
     <div className={styles.page}>
+      <OnboardingWrapper />
       <div className="container">
         <div className={styles.header}>
           <h1 className={styles.title}>Your Gifts</h1>
