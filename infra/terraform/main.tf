@@ -385,59 +385,96 @@ resource "aws_secretsmanager_secret" "cron_secret" {
 # ─── Security Groups ──────────────────────────────────────────────────────────
 
 resource "aws_security_group" "db" {
-  name   = "lumigift-${var.env}-db"
-  vpc_id = var.vpc_id
+  name        = "lumigift-${var.env}-db"
+  description = "PostgreSQL: allow inbound only from app servers"
+  vpc_id      = var.vpc_id
 
   ingress {
+    description     = "PostgreSQL from app servers only"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
   }
 
-  tags = local.tags
+  # No egress — DB never initiates outbound connections
+  egress {
+    description = "Deny all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = []
+  }
+
+  tags = merge(local.tags, { Name = "lumigift-${var.env}-db" })
 }
 
 resource "aws_security_group" "redis" {
-  name   = "lumigift-${var.env}-redis"
-  vpc_id = var.vpc_id
+  name        = "lumigift-${var.env}-redis"
+  description = "Redis: allow inbound only from app servers"
+  vpc_id      = var.vpc_id
 
   ingress {
+    description     = "Redis from app servers only"
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
   }
 
-  tags = local.tags
+  # No egress — Redis never initiates outbound connections
+  egress {
+    description = "Deny all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = []
+  }
+
+  tags = merge(local.tags, { Name = "lumigift-${var.env}-redis" })
 }
 
 resource "aws_security_group" "alb" {
-  name   = "lumigift-${var.env}-alb"
-  vpc_id = var.vpc_id
+  name        = "lumigift-${var.env}-alb"
+  description = "ALB: expose only ports 80 and 443 to the public internet"
+  vpc_id      = var.vpc_id
 
   ingress {
+    description = "HTTP from internet"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description = "HTTPS from internet"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Forward to app containers"
+    from_port       = 3000
+    to_port         = 3000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app.id]
   }
 
-  tags = local.tags
+  tags = merge(local.tags, { Name = "lumigift-${var.env}-alb" })
 }
 
 resource "aws_security_group" "app" {
-  name   = "lumigift-${var.env}-app"
-  vpc_id = var.vpc_id
+  name        = "lumigift-${var.env}-app"
+  description = "App containers: accept traffic from ALB only"
+  vpc_id      = var.vpc_id
 
   ingress {
+    description     = "HTTP from ALB only"
     from_port       = 3000
     to_port         = 3000
     protocol        = "tcp"
@@ -445,13 +482,38 @@ resource "aws_security_group" "app" {
   }
 
   egress {
+    description = "Allow all outbound (HTTPS to Stellar, Paystack, AWS APIs)"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = local.tags
+  tags = merge(local.tags, { Name = "lumigift-${var.env}-app" })
+}
+
+resource "aws_security_group" "bastion" {
+  name        = "lumigift-${var.env}-bastion"
+  description = "Bastion host: SSH restricted to VPN CIDR only"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "SSH from VPN only"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.vpn_cidr_blocks
+  }
+
+  egress {
+    description = "Allow outbound to private subnets"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = var.private_subnet_cidrs
+  }
+
+  tags = merge(local.tags, { Name = "lumigift-${var.env}-bastion" })
 }
 
 # ─── Locals ───────────────────────────────────────────────────────────────────
