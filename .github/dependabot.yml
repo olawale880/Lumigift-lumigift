@@ -16,6 +16,7 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    # Dependabot will update pinned commit SHAs and keep the # vX comment in sync
 
   - package-ecosystem: "cargo"
     directory: "/contracts/escrow"

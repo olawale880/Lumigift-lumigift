@@ -9,6 +9,10 @@ import { getCountryFromIp } from "@/lib/device";
 import { createHash } from "crypto";
 import { normalizePhone } from "@/lib/phone";
 import { verifyOtp } from "@/lib/otp";
+import { serviceLogger } from "@/lib/logger";
+import { jwtRotationOptions } from "@/lib/jwt-rotation";
+
+const log = serviceLogger("auth");
 
 function fingerprintFromHeaders(ua: string, lang: string, enc: string): string {
   return createHash("sha256").update(`${ua}|${lang}|${enc}`).digest("hex");
@@ -40,7 +44,7 @@ async function handleDeviceCheck(
 
     // Fire-and-forget — don't block login on SMS failure
     sendNewDeviceAlert(phone, { time, country, reportUrl }).catch((err) =>
-      console.error("[auth] sendNewDeviceAlert failed:", err)
+      log.error({ err }, "sendNewDeviceAlert failed")
     );
   } else {
     // Known device — refresh last_seen_at
@@ -51,11 +55,48 @@ async function handleDeviceCheck(
   }
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
+// Cookie security flags — enforced in production, relaxed locally so HTTP dev
+// server works without HTTPS.
+const secureCookieOptions = {
+  httpOnly: true,
+  sameSite: "strict" as const,
+  secure: isProd,
+  path: "/",
+};
+
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
+  jwt: jwtRotationOptions,
   pages: {
     signIn: "/auth/login",
     error: "/auth/error",
+  },
+  cookies: {
+    sessionToken: {
+      name: isProd
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: secureCookieOptions,
+    },
+    callbackUrl: {
+      name: isProd
+        ? "__Secure-next-auth.callback-url"
+        : "next-auth.callback-url",
+      options: secureCookieOptions,
+    },
+    csrfToken: {
+      // CSRF token must be readable by the login form JS, so HttpOnly is false.
+      // It is still Secure + SameSite=Strict in production.
+      name: isProd
+        ? "__Host-next-auth.csrf-token"
+        : "next-auth.csrf-token",
+      options: {
+        ...secureCookieOptions,
+        httpOnly: false,
+      },
+    },
   },
   providers: [
     CredentialsProvider({
@@ -87,7 +128,7 @@ export const authOptions: NextAuthOptions = {
 
         // Device fingerprint check
         try {
-          const reqHeaders = headers();
+          const reqHeaders = await headers();
           const ua = reqHeaders.get("user-agent") ?? "";
           const lang = reqHeaders.get("accept-language") ?? "";
           const enc = reqHeaders.get("accept-encoding") ?? "";
@@ -98,7 +139,7 @@ export const authOptions: NextAuthOptions = {
           await handleDeviceCheck(user.id, user.phone, fingerprint, ip);
         } catch (err) {
           // Never block login due to device-check errors
-          console.error("[auth] device check error:", err);
+          log.error({ err }, "device check error");
         }
 
         return user;

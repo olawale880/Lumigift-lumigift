@@ -1,68 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { withErrorHandler, rateLimit, validateRequest, searchParamsToObject } from "@/server/middleware";
+import { requireAdmin } from "@/server/middleware/admin";
+import { adminListGifts, logAdminAction, type AdminGiftPage } from "@/server/services/admin-gift.service";
+import { adminGiftsQuerySchema } from "@/lib/schemas";
 import type { ApiResponse } from "@/types";
 
-function isAdmin(req: NextRequest): boolean {
-  const token = req.headers.get("authorization");
-  return token === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+export const GET = withErrorHandler(async (req: NextRequest) => {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
 
-export interface AdminGiftRow {
-  id: string;
-  sender_id: string;
-  recipient_phone: string;
-  amount_ngn: number;
-  status: string;
-  unlock_at: string;
-  created_at: string;
-}
-
-export interface AdminGiftsPage {
-  gifts: AdminGiftRow[];
-  total: number;
-}
-
-export const GET = async (req: NextRequest) => {
-  if (!isAdmin(req)) {
+  // Rate-limit: 60 requests per minute per admin
+  if (!rateLimit(`admin:${auth.userId}`, 60, 60_000)) {
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { success: false, error: "Too many requests", code: "RATE_LIMITED" },
+      { status: 429 }
     );
   }
 
-  const { searchParams } = req.nextUrl;
-  const status = searchParams.get("status");
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = 20;
-  const offset = (page - 1) * limit;
+  // ── Validate query params ────────────────────────────────────────────────
+  const validation = validateRequest(
+    adminGiftsQuerySchema,
+    searchParamsToObject(req.nextUrl.searchParams)
+  );
+  if (!validation.success) return validation.errorResponse;
 
-  const conditions: string[] = [];
-  const params: unknown[] = [];
+  const { search, status, cursor, limit: queryLimit } = validation.data;
 
-  if (status) {
-    params.push(status);
-    conditions.push(`status = $${params.length}`);
-  }
-
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  const [giftsResult, countResult] = await Promise.all([
-    pool.query<AdminGiftRow>(
-      `SELECT id, sender_id, recipient_phone, amount_ngn, status, unlock_at, created_at
-       FROM gifts ${where} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-      params
-    ),
-    pool.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM gifts ${where}`,
-      params
-    ),
-  ]);
-
-  return NextResponse.json<ApiResponse<AdminGiftsPage>>({
-    success: true,
-    data: {
-      gifts: giftsResult.rows,
-      total: parseInt(countResult.rows[0].count, 10),
-    },
+  const page = adminListGifts({
+    search,
+    status,
+    cursor,
+    limit: queryLimit,
   });
-};
+
+  logAdminAction(auth.userId, "list_gifts", "all");
+
+  return NextResponse.json<ApiResponse<AdminGiftPage>>({ success: true, data: page });
+});

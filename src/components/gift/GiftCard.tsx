@@ -5,7 +5,9 @@ import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import type { Gift, GiftStatus } from "@/types";
 import { GiftStatusBadge } from "@/components/ui/GiftStatusBadge";
+import { formatNGN } from "@/lib/currency";
 import { ClaimButton } from "./ClaimButton";
+import { ShareGift } from "./ShareGift";
 import styles from "./GiftCard.module.css";
 
 interface GiftCardProps {
@@ -29,9 +31,7 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
     perspective === "sender" ? `To: ${gift.recipientName}` : "A gift for you";
 
   const amountLabel =
-    isLocked && perspective === "recipient"
-      ? "amount hidden"
-      : `₦${gift.amountNgn.toLocaleString("en-NG")}`;
+    isLocked && perspective === "recipient" ? "amount hidden" : formatNGN(gift.amountNgn);
 
   const unlockLabel = `${isLocked ? "Unlocks" : "Unlocked"} ${format(
     new Date(gift.unlockAt),
@@ -74,7 +74,7 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
         {isLocked && perspective === "recipient" ? (
           <span className={styles.hidden}>₦ ••••••</span>
         ) : (
-          <span>₦{gift.amountNgn.toLocaleString("en-NG")}</span>
+          <span>{formatNGN(gift.amountNgn)}</span>
         )}
       </div>
 
@@ -84,6 +84,13 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
 
       {gift.message && !isLocked && (
         <p className={styles.message}>{gift.message}</p>
+      )}
+
+      {gift.voiceNoteUrl && !isLocked && (
+        <div className={styles.voiceNote}>
+          <span className={styles.voiceNoteLabel}>Voice note</span>
+          <audio src={gift.voiceNoteUrl} controls className={styles.voiceNotePlayer} aria-label="Gift voice note" />
+        </div>
       )}
 
       {gift.stellarTxHash && (
@@ -119,6 +126,12 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
             recipientStellarKey={recipientStellarKey}
             onStatusChange={setStatus}
           />
+        </div>
+      )}
+
+      {perspective === "sender" && (status === "locked" || status === "funded") && (
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <ShareGift giftId={gift.id} recipientName={gift.recipientName} />
         </div>
       )}
     </article>

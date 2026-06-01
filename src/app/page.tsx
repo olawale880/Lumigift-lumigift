@@ -1,22 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import styles from "./page.module.css";
-import type { PlatformStats } from "@/app/api/v1/stats/route";
-import type { ApiResponse } from "@/types";
-
-async function getPlatformStats(): Promise<PlatformStats> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/v1/stats`,
-      { next: { revalidate: 3600 } }
-    );
-    const json: ApiResponse<PlatformStats> = await res.json();
-    if (json.success) return json.data;
-  } catch {
-    // fallback below
-  }
-  return { totalGiftsSent: 0, totalValueNgn: 0 };
-}
+import { HeroCTA } from "@/components/ab-testing/HeroCTA";
 
 export const metadata: Metadata = {
   title: "Lumigift — Time-Locked Cash Gifts on Stellar",
@@ -43,9 +28,7 @@ export default async function HomePage() {
             unforgettable.
           </p>
           <div className={styles.cta}>
-            <Link href="/send" className="btn btn--primary btn--lg">
-              Send a Gift
-            </Link>
+            <HeroCTA />
             <Link href="/how-it-works" className="btn btn--secondary btn--lg">
               How it works
             </Link>
