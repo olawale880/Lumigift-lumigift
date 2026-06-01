@@ -4,6 +4,13 @@ import { getGiftById, updateGiftStatus } from "./gift.service";
 // ─── In-memory user store (replace with DB in production) ────────────────────
 const users = new Map<string, User & { banned?: boolean }>();
 
+/**
+ * Retrieves all gifts applying optional filters.
+ *
+ * @param {{status?: GiftStatus; userId?: string; from?: Date; to?: Date}} filters - Filtering options.
+ * @returns {Promise<Gift[]>} A promise that resolves to an array of matching gifts.
+ * @throws {Error} If the underlying data source fails.
+ */
 export async function adminGetAllGifts(filters: {
   status?: GiftStatus;
   userId?: string;
@@ -23,10 +30,24 @@ export async function adminGetAllGifts(filters: {
   return results;
 }
 
+/**
+ * Expires a gift by setting its status to `expired`.
+ *
+ * @param {string} id - Identifier of the gift to expire.
+ * @returns {Promise<Gift | null>} The updated gift or `null` if not found.
+ * @throws {Error} If the update operation fails.
+ */
 export async function adminExpireGift(id: string): Promise<Gift | null> {
   return updateGiftStatus(id, "expired");
 }
 
+/**
+ * Refunds a gift by marking it as `cancelled` (and triggering a payment refund in production).
+ *
+ * @param {string} id - Identifier of the gift to refund.
+ * @returns {Promise<Gift | null>} The updated gift or `null` if not found.
+ * @throws {Error} If the refund process fails.
+ */
 export async function adminRefundGift(id: string): Promise<Gift | null> {
   const gift = await getGiftById(id);
   if (!gift) return null;
@@ -34,6 +55,13 @@ export async function adminRefundGift(id: string): Promise<Gift | null> {
   return updateGiftStatus(id, "cancelled");
 }
 
+/**
+ * Bans a user by setting the `banned` flag to true. If the user does not exist, a placeholder record is created.
+ *
+ * @param {string} id - User identifier to ban.
+ * @returns {Promise<{id: string; banned: boolean} | null>} The ban record or `null` if operation fails.
+ * @throws {Error} If updating the user store fails.
+ */
 export async function adminBanUser(id: string): Promise<{ id: string; banned: boolean } | null> {
   const user = users.get(id);
   if (!user) {
