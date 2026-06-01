@@ -1,47 +1,47 @@
-/**
- * Unlock scheduler — checks for gifts whose unlockAt has passed and
- * transitions them from "locked" → "unlocked", then notifies recipients.
- */
+import pool from "@/lib/db";
 
-// Placeholder: in production, query DB for all locked gifts past their unlockAt.
+/**
+ * Unlock scheduler — finds locked gifts whose unlockAt has passed and
+ * transitions them to "unlocked".
+ * Returns the count of gifts processed.
+ */
 export async function processUnlocks(): Promise<number> {
-  const now = new Date();
-  // TODO: replace with DB query: SELECT * FROM gifts WHERE status='locked' AND unlock_at <= now
-  console.warn("[scheduler] processUnlocks called — wire up DB query here", now);
-  return 0; // return count of processed gifts
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM gifts WHERE status = 'locked' AND unlock_at <= NOW()`
+  );
+
+  if (rows.length === 0) return 0;
+
+  const ids = rows.map((r) => r.id);
+  await pool.query(
+    `UPDATE gifts SET status = 'unlocked', updated_at = NOW()
+     WHERE id = ANY($1::uuid[])`,
+    [ids]
+  );
+
+  console.log(`[scheduler] unlocked ${ids.length} gift(s)`);
+  return ids.length;
 }
 
 /**
- * Expiry scheduler — identifies gifts that have been unlocked but unclaimed
- * for more than 365 days, marks them as "expired", and notifies the sender.
- *
- * In production, run daily via Vercel Cron or pg_cron.
+ * Expiry scheduler — marks unlocked gifts unclaimed for 365+ days as "expired".
  */
 export async function processExpiries(): Promise<void> {
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
 
-  // TODO: replace with DB query:
-  //   SELECT * FROM gifts
-  //   WHERE status = 'unlocked' AND unlock_at <= :cutoff
-  console.warn(
-    "[scheduler] processExpiries called — wire up DB query here. Cutoff:",
-    cutoff.toISOString()
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM gifts WHERE status = 'unlocked' AND unlock_at <= $1`,
+    [cutoff]
   );
 
-  // Pseudocode for production implementation:
-  //
-  // const expiredGifts = await db.gift.findMany({
-  //   where: { status: "unlocked", unlockAt: { lte: cutoff } },
-  // });
-  //
-  // for (const gift of expiredGifts) {
-  //   await updateGiftStatus(gift.id, "expired");
-  //   // Refund USDC to sender's Stellar address
-  //   if (gift.contractId && gift.senderStellarKey) {
-  //     await refundEscrow(gift.contractId, gift.senderStellarKey);
-  //   }
-  //   // Notify sender via SMS
-  //   await sendSms(gift.senderPhone, `Your Lumigift of ${gift.amountUsdc} USDC has expired and been refunded.`);
-  // }
+  if (rows.length === 0) return;
+
+  const ids = rows.map((r) => r.id);
+  await pool.query(
+    `UPDATE gifts SET status = 'expired', updated_at = NOW()
+     WHERE id = ANY($1::uuid[])`,
+    [ids]
+  );
+
+  console.log(`[scheduler] expired ${ids.length} gift(s)`);
 }

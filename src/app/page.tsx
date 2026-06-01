@@ -1,12 +1,31 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import styles from "./page.module.css";
+import type { PlatformStats } from "@/app/api/v1/stats/route";
+import type { ApiResponse } from "@/types";
+
+async function getPlatformStats(): Promise<PlatformStats> {
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/v1/stats`,
+      { next: { revalidate: 3600 } }
+    );
+    const json: ApiResponse<PlatformStats> = await res.json();
+    if (json.success) return json.data;
+  } catch {
+    // fallback below
+  }
+  return { totalGiftsSent: 0, totalValueNgn: 0 };
+}
 
 export const metadata: Metadata = {
   title: "Lumigift — Time-Locked Cash Gifts on Stellar",
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const stats = await getPlatformStats();
+  const showStats = stats.totalGiftsSent > 0;
+
   return (
     <>
       {/* Hero */}
@@ -31,6 +50,17 @@ export default function HomePage() {
               How it works
             </Link>
           </div>
+          {showStats && (
+            <div className={styles.socialProof} aria-label="Platform statistics">
+              <span>
+                <strong>{stats.totalGiftsSent.toLocaleString()}+</strong> gifts sent
+              </span>
+              <span className={styles.socialProofDivider} aria-hidden="true">·</span>
+              <span>
+                <strong>₦{(stats.totalValueNgn / 1_000_000).toFixed(1)}M+</strong> gifted
+              </span>
+            </div>
+          )}
         </div>
       </section>
 
