@@ -463,3 +463,50 @@ locals {
     ManagedBy   = "terraform"
   }
 }
+
+# ─── Application Auto Scaling — ECS Fargate (min 2, max 10) ──────────────────
+
+resource "aws_appautoscaling_target" "app" {
+  max_capacity       = 10
+  min_capacity       = 2
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  depends_on = [aws_ecs_service.app]
+}
+
+resource "aws_appautoscaling_policy" "cpu" {
+  name               = "lumigift-${var.env}-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.app.resource_id
+  scalable_dimension = aws_appautoscaling_target.app.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.app.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 60.0
+    scale_out_cooldown = 60   # react to spikes within 60 s
+    scale_in_cooldown  = 300  # 5-minute cooldown to prevent flapping
+  }
+}
+
+resource "aws_appautoscaling_policy" "requests" {
+  name               = "lumigift-${var.env}-requests-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.app.resource_id
+  scalable_dimension = aws_appautoscaling_target.app.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.app.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      resource_label = "${aws_alb.main.arn_suffix}/${aws_alb_target_group.blue.arn_suffix}"
+    }
+    target_value       = 1000 # requests per target per minute
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
+  }
+}
