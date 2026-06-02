@@ -6,7 +6,15 @@ const nextConfig = {
   output: "standalone",
   // Moved out of experimental in Next.js 15+
   serverExternalPackages: ["@stellar/stellar-sdk"],
+
+  // CDN: serve static assets and optimized images from CDN domain when set.
+  // Set NEXT_PUBLIC_CDN_URL=https://cdn.lumigift.com in production env vars.
+  assetPrefix: process.env.NEXT_PUBLIC_CDN_URL ?? undefined,
+
   images: {
+    // When NEXT_PUBLIC_CDN_URL is set, use custom CDN loader for image optimization.
+    loader: process.env.NEXT_PUBLIC_CDN_URL ? "custom" : "default",
+    loaderFile: process.env.NEXT_PUBLIC_CDN_URL ? "./src/lib/cdn-image-loader.ts" : undefined,
     remotePatterns: [
       {
         protocol: "https",
