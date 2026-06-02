@@ -64,7 +64,7 @@
     "bullmq": "^5.56.0",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
-    "date-fns": "^4.3.0",
+    "date-fns": "^4.4.0",
     "jose": "^6.2.3",
     "next": "16.2.7",
     "next-auth": "^4.24.14",
