@@ -5,7 +5,17 @@ import { getRedisClient } from "@/lib/redis";
 import type { ApiResponse } from "@/types";
 import type Stripe from "stripe";
 
-const IDEMPOTENCY_TTL_SECONDS = 86_400; // 24 hours
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+if (!webhookSecret) {
+  throw new Error("Missing required environment variable: STRIPE_WEBHOOK_SECRET");
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
+  apiVersion: "2026-05-27.dahlia",
+});
+
+// Next.js must not parse the body — Stripe needs the raw bytes for signature verification.
+// In App Router, request body is not pre-parsed, so no config needed.
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature");

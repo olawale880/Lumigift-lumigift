@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getGiftById, cancelGift } from "@/server/services/gift.service";
+import { getGiftById, cancelGift, softDeleteGift } from "@/server/services/gift.service";
 import { refundPayment } from "@/lib/paystack";
-import { withErrorHandler } from "@/server/middleware";
+import { withErrorHandler, withCsrf, validateRequest } from "@/server/middleware";
+import { giftIdParamSchema } from "@/lib/schemas";
 import type { ApiResponse, Gift } from "@/types";
 
 export const GET = withErrorHandler(
   async (_req: NextRequest, context: unknown) => {
+    // ── Validate path param ────────────────────────────────────────────────
     const { params } = context as { params: { id: string } };
-    const gift = await getGiftById(params.id);
+    const paramValidation = validateRequest(giftIdParamSchema, params);
+    if (!paramValidation.success) return paramValidation.errorResponse;
+
+    const gift = await getGiftById(paramValidation.data.id);
 
     if (!gift) {
       return NextResponse.json<ApiResponse<never>>(
@@ -37,7 +42,7 @@ export const GET = withErrorHandler(
 );
 
 export const DELETE = withErrorHandler(
-  async (_req: NextRequest, context: unknown) => {
+  withCsrf(async (_req: NextRequest, context: unknown) => {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json<ApiResponse<never>>(
@@ -46,8 +51,12 @@ export const DELETE = withErrorHandler(
       );
     }
 
+    // ── Validate path param ──────────────────────────────────────────────
     const { params } = context as { params: { id: string } };
-    const gift = await getGiftById(params.id);
+    const paramValidation = validateRequest(giftIdParamSchema, params);
+    if (!paramValidation.success) return paramValidation.errorResponse;
+
+    const gift = await getGiftById(paramValidation.data.id);
 
     if (!gift) {
       return NextResponse.json<ApiResponse<never>>(
@@ -83,10 +92,12 @@ export const DELETE = withErrorHandler(
     await refundPayment(paystackRef);
 
     const cancelled = await cancelGift(gift.id);
+    // Soft-delete: preserve record for audit trail
+    await softDeleteGift(gift.id);
 
     return NextResponse.json<ApiResponse<Gift>>({
       success: true,
       data: cancelled!,
     });
-  }
+  })
 );

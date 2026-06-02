@@ -4,23 +4,30 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "npm"
+      - "security"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
     labels:
       - "dependencies"
       - "github-actions"
+    # Dependabot will update pinned commit SHAs and keep the # vX comment in sync
 
   - package-ecosystem: "cargo"
     directory: "/contracts/escrow"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "rust"
+      - "security"

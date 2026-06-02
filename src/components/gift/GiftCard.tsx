@@ -5,7 +5,10 @@ import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import type { Gift, GiftStatus } from "@/types";
 import { GiftStatusBadge } from "@/components/ui/GiftStatusBadge";
+import { formatNGN } from "@/lib/currency";
 import { ClaimButton } from "./ClaimButton";
+import { ShareGift } from "./ShareGift";
+import { CancelGiftModal } from "./CancelGiftModal";
 import styles from "./GiftCard.module.css";
 
 interface GiftCardProps {
@@ -24,14 +27,13 @@ function explorerUrl(txHash: string) {
 export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardProps) {
   const router = useRouter();
   const [status, setStatus] = useState<GiftStatus>(gift.status);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const isLocked = status === "locked";
   const name =
     perspective === "sender" ? `To: ${gift.recipientName}` : "A gift for you";
 
   const amountLabel =
-    isLocked && perspective === "recipient"
-      ? "amount hidden"
-      : `₦${gift.amountNgn.toLocaleString("en-NG")}`;
+    isLocked && perspective === "recipient" ? "amount hidden" : formatNGN(gift.amountNgn);
 
   const unlockLabel = `${isLocked ? "Unlocks" : "Unlocked"} ${format(
     new Date(gift.unlockAt),
@@ -74,7 +76,7 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
         {isLocked && perspective === "recipient" ? (
           <span className={styles.hidden}>₦ ••••••</span>
         ) : (
-          <span>₦{gift.amountNgn.toLocaleString("en-NG")}</span>
+          <span>{formatNGN(gift.amountNgn)}</span>
         )}
       </div>
 
@@ -84,6 +86,13 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
 
       {gift.message && !isLocked && (
         <p className={styles.message}>{gift.message}</p>
+      )}
+
+      {gift.voiceNoteUrl && !isLocked && (
+        <div className={styles.voiceNote}>
+          <span className={styles.voiceNoteLabel}>Voice note</span>
+          <audio src={gift.voiceNoteUrl} controls className={styles.voiceNotePlayer} aria-label="Gift voice note" />
+        </div>
       )}
 
       {gift.stellarTxHash && (
@@ -119,6 +128,39 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
             recipientStellarKey={recipientStellarKey}
             onStatusChange={setStatus}
           />
+        </div>
+      )}
+
+      {perspective === "sender" && (status === "locked" || status === "funded") && (
+        <div
+          className={styles.actions}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <ShareGift giftId={gift.id} recipientName={gift.recipientName} />
+          <button
+            className="btn btn--secondary btn--sm"
+            onClick={() => setShowCancelModal(true)}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {perspective === "sender" && (
+        <div
+          className={styles.meta}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <a
+            href={`/api/v1/gifts/${gift.id}/receipt`}
+            download={`lumigift-receipt-${gift.id}.pdf`}
+            className="btn btn--ghost btn--sm"
+            aria-label="Download PDF receipt"
+          >
+            ↓ Receipt
+          </a>
         </div>
       )}
     </article>
