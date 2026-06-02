@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { GiftCard } from "@/components/gift/GiftCard";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import type { Gift, OccasionCategory } from "@/types";
 
 interface Props {
@@ -58,11 +59,13 @@ export default async function GiftClaimPage({ params, searchParams }: Props) {
           padding: "0.25rem",
         }}
       >
-        <GiftCard
-          gift={gift}
-          perspective="recipient"
-          recipientStellarKey={searchParams.stellarKey}
-        />
+        <ErrorBoundary name={`GiftCard:${gift.id}`}>
+          <GiftCard
+            gift={gift}
+            perspective="recipient"
+            recipientStellarKey={searchParams.stellarKey}
+          />
+        </ErrorBoundary>
       </div>
     </main>
   );

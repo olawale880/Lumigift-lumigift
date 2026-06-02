@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { GiftCard } from "@/components/gift/GiftCard";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import styles from "./page.module.css";
 import type { ApiResponse } from "@/types";
 import type { GiftPageOffset } from "@/server/services/gift.service";
@@ -147,7 +148,9 @@ export default function DashboardPage() {
             </p>
             <div className={styles.grid}>
               {gifts.map((gift) => (
-                <GiftCard key={gift.id} gift={gift} perspective="sender" />
+                <ErrorBoundary key={gift.id} name={`GiftCard:${gift.id}`}>
+                  <GiftCard gift={gift} perspective="sender" />
+                </ErrorBoundary>
               ))}
             </div>
             <div className={styles.loadMore}>
