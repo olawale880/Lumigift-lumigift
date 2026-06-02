@@ -9,13 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dark mode support with system preference detection and persistent user preference storage
+- Toast notification system for user feedback with support for success, error, warning, and info variants
+- Mobile-responsive improvements for the gift creation flow
+- Theme toggle button in navbar for user preference control
+
 ### Changed
+
+- Enhanced Navbar with theme toggle functionality
+- Improved mobile responsiveness across form inputs and buttons
+- Updated touch target sizes on mobile devices to meet accessibility standards (44px minimum)
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+- Fixed touch target sizes on mobile devices for better usability
+- Improved contrast ratios in both light and dark themes
+- Enhanced ARIA announcements for toast notifications
 
 ### Security
 
