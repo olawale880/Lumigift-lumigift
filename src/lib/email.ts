@@ -99,3 +99,26 @@ export async function sendClaimConfirmationEmail(to: string, data: GiftEmailData
     html: baseTemplate("Lumigift claimed!", body),
   });
 }
+
+export async function sendDeletionConfirmationEmail(
+  to: string,
+  data: { recipientName: string; requestId: string }
+): Promise<void> {
+  const body = `
+    <p>Hi ${data.recipientName},</p>
+    <p>Your data deletion request has been processed successfully. ✅</p>
+    <div class="highlight">
+      <p class="label">Request ID</p>
+      <p class="value" style="font-size:13px;font-family:monospace">${data.requestId}</p>
+    </div>
+    <p>Your personal data (phone number, name, device records, gift messages) has been deleted or anonymized.</p>
+    <p>Financial records are retained as required by Nigerian law (NDPR) and international regulations.</p>
+    <p>If you did not request this, please contact <a href="mailto:security@lumigift.com" style="color:#6c3bff">security@lumigift.com</a> immediately.</p>
+  `;
+  await getResendClient().emails.send({
+    from: FROM,
+    to,
+    subject: "✅ Your Lumigift data has been deleted",
+    html: baseTemplate("Data Deletion Confirmed", body),
+  });
+}
