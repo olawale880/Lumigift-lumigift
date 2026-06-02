@@ -1,123 +1,250 @@
-# Database Backup & Point-in-Time Recovery
+# Database Backup & Restore Runbook
 
-## Overview
+PostgreSQL is hosted on AWS RDS (`lumigift-prod`). This document covers the backup strategy, retention policy, restore procedure, and alerting setup.
 
-Daily `pg_dump` backups are stored in an encrypted S3 bucket with 30-day retention.
-Backups run at **02:00 UTC** via GitHub Actions and are encrypted with a dedicated KMS key.
+---
 
-## Architecture
+## Backup strategy
 
-| Component | Detail |
-|-----------|--------|
-| Backup tool | `pg_dump` (custom format, compression level 9) |
-| Storage | `lumigift-prod-db-backups` S3 bucket |
-| Encryption | SSE-KMS (`alias/lumigift-prod-backup`) |
-| Retention | 30 days (S3 lifecycle rule) |
-| Schedule | Daily 02:00 UTC (`cron(0 2 * * *)`) |
-| Auth | GitHub Actions OIDC → IAM role (no long-lived keys) |
-| Alerts | CloudWatch → SNS email on failure or missing backup |
+### Production — RDS automated backups (primary)
 
-## Required GitHub Actions Secrets
+RDS automated backups are enabled on the `aws_db_instance.postgres` resource. They capture a daily snapshot plus continuous transaction logs, enabling point-in-time recovery (PITR) to any second within the retention window.
 
-| Secret | Value |
-|--------|-------|
-| `BACKUP_IAM_ROLE_ARN` | Output of `terraform output backup_iam_role_arn` |
-| `BACKUP_S3_BUCKET` | Output of `terraform output backup_bucket_name` |
+Add the following arguments to `infra/terraform/main.tf` under `aws_db_instance.postgres`:
 
-## Running a Manual Backup
+```hcl
+backup_retention_period   = 30          # days
+backup_window             = "02:00-03:00"  # UTC, low-traffic window
+maintenance_window        = "sun:03:00-sun:04:00"
+copy_tags_to_snapshot     = true
+```
+
+Apply the change:
 
 ```bash
-# Trigger via GitHub Actions UI
-gh workflow run db-backup.yml
-
-# Or run locally (requires AWS credentials + pg_dump)
-export DATABASE_URL="postgresql://..."
-export BACKUP_S3_BUCKET="lumigift-prod-db-backups"
-bash scripts/backup.sh
+terraform apply -target=aws_db_instance.postgres
 ```
 
-## Point-in-Time Recovery
+RDS will automatically:
+- Take a full snapshot once per day during `backup_window`
+- Stream WAL logs continuously for PITR
+- Retain all backups for **30 days**, then delete them automatically
 
-### 1. Identify the target timestamp
+### Staging / local — pg_dump to S3 (secondary)
 
-Determine the latest safe point before the incident (ISO 8601 UTC):
+For staging or as an additional off-site copy, run `pg_dump` via a scheduled job (cron or GitHub Actions).
 
-```
-2026-05-31T01:59:00Z
-```
-
-### 2. List available backups
+**Manual one-off backup:**
 
 ```bash
-aws s3 ls s3://lumigift-prod-db-backups/backups/ \
-  | awk '{print $4}' | sort
+pg_dump "$DATABASE_URL" \
+  --format=custom \
+  --no-acl \
+  --no-owner \
+  --file="lumigift_$(date +%Y%m%d_%H%M%S).dump"
 ```
 
-### 3. Restore
+**Upload to S3:**
 
 ```bash
-export DATABASE_URL="postgresql://lumigift:<password>@<host>:5432/lumigift"
-export BACKUP_S3_BUCKET="lumigift-prod-db-backups"
-
-# Restore to the latest backup at or before the target timestamp
-bash scripts/backup.sh --restore 2026-05-31T01:59:00Z
+aws s3 cp lumigift_*.dump s3://lumigift-backups/postgres/ \
+  --sse aws:kms
 ```
 
-The script will:
-1. Find the newest backup file with a timestamp ≤ the target.
-2. Download it from S3.
-3. Run `pg_restore --clean --if-exists` against `DATABASE_URL`.
+**Automated daily backup via cron (example `/etc/cron.d/lumigift-backup`):**
 
-### 4. Verify
-
-```sql
--- Connect and spot-check critical tables
-SELECT COUNT(*) FROM gifts;
-SELECT MAX(created_at) FROM gifts;
+```cron
+0 2 * * * root /usr/local/bin/lumigift-backup.sh >> /var/log/lumigift-backup.log 2>&1
 ```
 
-### 5. Resume traffic
-
-Once verified, re-enable the App Runner service or remove the maintenance page.
-
-## Terraform Setup (first time)
+`/usr/local/bin/lumigift-backup.sh`:
 
 ```bash
-cd infra/terraform
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Create the GitHub OIDC provider (once per AWS account)
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+FILE="lumigift_${TIMESTAMP}.dump"
+BUCKET="lumigift-backups"
 
-# Apply backup resources
-terraform init
-terraform apply -target=aws_s3_bucket.backup \
-                -target=aws_iam_role.backup \
-                -target=aws_cloudwatch_metric_alarm.backup_failure \
-                -target=aws_cloudwatch_metric_alarm.backup_missing
+pg_dump "$DATABASE_URL" --format=custom --no-acl --no-owner --file="/tmp/${FILE}"
+aws s3 cp "/tmp/${FILE}" "s3://${BUCKET}/postgres/${FILE}" --sse aws:kms
+rm -f "/tmp/${FILE}"
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Backup uploaded: ${FILE}"
 ```
 
-After apply, copy the outputs into GitHub Actions secrets:
+---
+
+## Retention policy
+
+| Backup type | Retention | Storage |
+|---|---|---|
+| RDS automated snapshots | 30 days | Managed by AWS |
+| RDS manual snapshots | Until deleted manually | Managed by AWS |
+| pg_dump files (S3) | 30 days | S3 lifecycle rule (see below) |
+
+**S3 lifecycle rule** — apply to the `lumigift-backups` bucket to auto-expire old dumps:
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "expire-postgres-backups",
+      "Filter": { "Prefix": "postgres/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 30 }
+    }
+  ]
+}
+```
+
+Apply via CLI:
 
 ```bash
-terraform output backup_iam_role_arn
-terraform output backup_bucket_name
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket lumigift-backups \
+  --lifecycle-configuration file://s3-lifecycle.json
 ```
+
+---
+
+## Restore procedure
+
+### Option A — RDS point-in-time restore (recommended for production)
+
+Use this when you need to recover to a specific moment (e.g. just before accidental data deletion).
+
+1. **Identify the target time** — check application logs or Sentry for the last known-good timestamp.
+
+2. **Restore to a new RDS instance** via the AWS console or CLI:
+
+   ```bash
+   aws rds restore-db-instance-to-point-in-time \
+     --source-db-instance-identifier lumigift-prod \
+     --target-db-instance-identifier lumigift-prod-restored \
+     --restore-time 2026-04-25T14:30:00Z \
+     --db-instance-class db.t4g.micro \
+     --no-publicly-accessible
+   ```
+
+3. **Verify the restored instance** — connect and spot-check critical tables:
+
+   ```sql
+   SELECT COUNT(*) FROM gifts;
+   SELECT COUNT(*) FROM gifts WHERE status = 'claimed';
+   SELECT MAX(created_at) FROM gifts;
+   ```
+
+4. **Update the `DATABASE_URL` secret** in AWS Secrets Manager to point to the restored instance endpoint.
+
+5. **Restart the App Runner service** to pick up the new connection string:
+
+   ```bash
+   aws apprunner start-deployment \
+     --service-arn <APP_RUNNER_SERVICE_ARN>
+   ```
+
+6. **Rename instances** once satisfied — promote the restored instance to `lumigift-prod` and decommission the old one.
+
+### Option B — Restore from pg_dump (staging or manual backup)
+
+Use this to restore a `pg_dump` file to any PostgreSQL instance.
+
+1. **Download the backup from S3:**
+
+   ```bash
+   aws s3 cp s3://lumigift-backups/postgres/lumigift_20260425_020000.dump ./restore.dump
+   ```
+
+2. **Create a clean target database** (skip if restoring in-place):
+
+   ```bash
+   createdb lumigift_restore
+   ```
+
+3. **Restore:**
+
+   ```bash
+   pg_restore \
+     --dbname="$DATABASE_URL" \
+     --no-acl \
+     --no-owner \
+     --verbose \
+     restore.dump
+   ```
+
+4. **Verify row counts and spot-check data** (same queries as Option A step 3).
+
+5. **Run pending migrations** to ensure schema is current:
+
+   ```bash
+   # example using your migration tool
+   npx db-migrate up
+   ```
+
+### Testing restores
+
+Restore procedures must be tested **quarterly** against a staging environment:
+
+1. Trigger a PITR restore to `lumigift-staging-restored` using a timestamp from the previous day.
+2. Run the verification queries above.
+3. Confirm the application starts and can read/write data against the restored instance.
+4. Document the test date and outcome in the table below.
+
+| Date | Tester | Method | Outcome |
+|---|---|---|---|
+| — | — | — | — |
+
+---
 
 ## Alerts
 
-Two CloudWatch alarms notify `ops@lumigift.app` via SNS:
+### RDS backup failure (CloudWatch)
 
-- **backup-failure** — fires when the log group receives an `ERROR` line.
-- **backup-missing** — fires when no successful backup is recorded in a 24-hour window (treats missing data as breaching).
+Create a CloudWatch alarm on the `FreeStorageSpace` metric and subscribe to RDS event notifications for backup failures.
 
-To subscribe additional emails:
+**SNS topic for backup alerts:**
 
 ```bash
+aws sns create-topic --name lumigift-db-backup-alerts
+
 aws sns subscribe \
-  --topic-arn <sns_topic_arn> \
+  --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:lumigift-db-backup-alerts \
   --protocol email \
-  --notification-endpoint you@example.com
+  --notification-endpoint ops@lumigift.app
 ```
+
+**RDS event subscription** (covers backup start/finish/failure):
+
+```bash
+aws rds create-event-subscription \
+  --subscription-name lumigift-backup-events \
+  --sns-topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:lumigift-db-backup-alerts \
+  --source-type db-instance \
+  --source-ids lumigift-prod \
+  --event-categories backup notification
+```
+
+### pg_dump script alerts
+
+The backup script (`lumigift-backup.sh`) uses `set -euo pipefail` — any failure exits non-zero. Wire it to an alerting channel by wrapping the cron call:
+
+```bash
+/usr/local/bin/lumigift-backup.sh || \
+  aws sns publish \
+    --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:lumigift-db-backup-alerts \
+    --message "Lumigift pg_dump backup FAILED on $(hostname) at $(date -u)"
+```
+
+---
+
+## Quick reference
+
+| Task | Command / location |
+|---|---|
+| List RDS snapshots | `aws rds describe-db-snapshots --db-instance-identifier lumigift-prod` |
+| Create manual snapshot | `aws rds create-db-snapshot --db-instance-identifier lumigift-prod --db-snapshot-identifier lumigift-manual-YYYYMMDD` |
+| List S3 backups | `aws s3 ls s3://lumigift-backups/postgres/` |
+| Check backup retention setting | AWS Console → RDS → lumigift-prod → Maintenance & backups |
+| Terraform resource | `infra/terraform/main.tf` → `aws_db_instance.postgres` |

@@ -20,6 +20,11 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "public_subnet_ids" {
+  description = "Public subnet IDs for the ALB"
+  type        = list(string)
+}
+
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
@@ -48,12 +53,12 @@ variable "domain_name" {
   type        = string
 }
 
-variable "github_oidc_provider_arn" {
-  description = "ARN of the GitHub Actions OIDC provider (created once per AWS account)"
-  type        = string
+variable "vpn_cidr_blocks" {
+  description = "CIDR blocks for VPN/bastion SSH access (e.g. [\"10.0.0.0/8\"])"
+  type        = list(string)
 }
 
-variable "ops_alert_email" {
-  description = "Email address for backup success/failure SNS alerts"
-  type        = string
+variable "private_subnet_cidrs" {
+  description = "CIDR ranges of private subnets — used to restrict bastion egress"
+  type        = list(string)
 }

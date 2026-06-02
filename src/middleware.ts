@@ -1,57 +1,57 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { randomBytes } from "crypto";
 
-// Matches /api/* but NOT /api/v1/* and NOT /api/auth/[...nextauth]
-const UNVERSIONED_API = /^\/api\/(?!v\d+\/)(.+)$/;
+export function middleware(request: NextRequest) {
+  const nonce = randomBytes(16).toString("base64");
+  const cspHeader = buildCspHeader(nonce);
 
-function buildCsp(nonce: string): string {
-  const directives: Record<string, string> = {
-    "default-src":     "'self'",
-    "script-src":      `'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    "style-src":       `'self' 'nonce-${nonce}'`,
-    "img-src":         "'self' data: https://res.cloudinary.com",
-    "font-src":        "'self'",
-    "connect-src":     "'self' https://horizon-testnet.stellar.org https://horizon.stellar.org",
-    "frame-ancestors": "'none'",
-    "base-uri":        "'self'",
-    "form-action":     "'self'",
-    "object-src":      "'none'",
-    "upgrade-insecure-requests": "",
-  };
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", cspHeader);
 
-  return Object.entries(directives)
-    .map(([k, v]) => (v ? `${k} ${v}` : k))
-    .join("; ");
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  response.headers.set("Content-Security-Policy", cspHeader);
+
+  return response;
 }
 
-export function middleware(req: NextRequest) {
-  // ── API redirect ────────────────────────────────────────────────────────────
-  const match = req.nextUrl.pathname.match(UNVERSIONED_API);
-  if (match) {
-    const url = req.nextUrl.clone();
-    url.pathname = `/api/v1/${match[1]}`;
-    const res = NextResponse.redirect(url, { status: 308 });
-    res.headers.set("Deprecation", "true");
-    res.headers.set("Link", `<${url.pathname}>; rel="successor-version"`);
-    return res;
-  }
+function buildCspHeader(nonce: string): string {
+  const isProd = process.env.NODE_ENV === "production";
 
-  // ── CSP nonce ───────────────────────────────────────────────────────────────
-  const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64");
-  const csp   = buildCsp(nonce);
+  const directives = [
+    `default-src 'self'`,
+    `script-src 'self' 'nonce-${nonce}' ${isProd ? "" : "'unsafe-eval'"} https://js.paystack.co https://js.stripe.com https://cdn.jsdelivr.net`,
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+    `font-src 'self' https://fonts.gstatic.com`,
+    `img-src 'self' data: https: blob:`,
+    `connect-src 'self' https://api.paystack.co https://api.stripe.com https://horizon-testnet.stellar.org https://horizon.stellar.org https://soroban-testnet.stellar.org https://soroban-mainnet.stellar.org`,
+    `frame-src https://js.paystack.co https://js.stripe.com`,
+    `object-src 'none'`,
+    `base-uri 'self'`,
+    `form-action 'self'`,
+    `frame-ancestors 'none'`,
+    `upgrade-insecure-requests`,
+    `report-uri /api/v1/csp-report`,
+  ];
 
-  const requestHeaders = new Headers(req.headers);
-  requestHeaders.set("x-nonce", nonce);
-
-  const res = NextResponse.next({ request: { headers: requestHeaders } });
-  res.headers.set("Content-Security-Policy", csp);
-  res.headers.set("x-nonce", nonce);
-  return res;
+  return directives.join("; ");
 }
 
 export const config = {
   matcher: [
-    "/api/:path*",
-    // Apply CSP to all page routes; skip static files and Next internals.
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
