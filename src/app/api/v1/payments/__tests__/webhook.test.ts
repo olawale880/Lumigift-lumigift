@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import crypto from "crypto";
+import { NextRequest } from "next/server";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -29,12 +30,16 @@ function makeSignature(body: string) {
   return crypto.createHmac("sha512", "test-secret").update(body).digest("hex");
 }
 
-function makeRequest(body: object, signature?: string) {
+function makeRequest(body: object, signature?: string | null) {
   const raw = JSON.stringify(body);
-  const sig = signature ?? makeSignature(raw);
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (signature !== null) {
+    headers["x-paystack-signature"] = signature ?? makeSignature(raw);
+  }
+
   return new Request("http://localhost/api/payments", {
     method: "POST",
-    headers: { "x-paystack-signature": sig, "content-type": "application/json" },
+    headers,
     body: raw,
   });
 }
@@ -42,18 +47,25 @@ function makeRequest(body: object, signature?: string) {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("POST /api/payments (Paystack webhook)", () => {
-  let POST: (req: Request) => Promise<Response>;
+  let POST: (req: NextRequest) => Promise<Response>;
 
   beforeEach(async () => {
     jest.resetModules();
     mockGet.mockReset();
     mockSet.mockReset();
     mockUpdateGiftStatus.mockReset();
-    ({ POST } = await import("@/app/api/payments/route"));
+    ({ POST } = await import("@/app/api/v1/payments/route"));
   });
 
   it("returns 401 for invalid signature", async () => {
     const req = makeRequest({ event: "charge.success", data: { reference: "ref1" } }, "badsig");
+    const res = await POST(req as never);
+    expect(res.status).toBe(401);
+    expect(mockUpdateGiftStatus).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when the signature header is missing", async () => {
+    const req = makeRequest({ event: "charge.success", data: { reference: "ref_missing" } }, null);
     const res = await POST(req as never);
     expect(res.status).toBe(401);
     expect(mockUpdateGiftStatus).not.toHaveBeenCalled();

@@ -26,3 +26,4 @@ Closes #
 - [ ] Types are correct (`npm run type-check`)
 - [ ] No secrets or PII committed
 - [ ] PR title follows Conventional Commits format
+- [ ] **Security:** Any new database queries use parameterized placeholders (`$1`, `$2`, …) — no string interpolation of user input in SQL (SQL injection check)
