@@ -214,6 +214,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Run database migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
       - name: Seed test database
         run: npm run db:seed:test
 
@@ -269,6 +274,11 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Run database migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
       - name: Seed test database
         run: npm run db:seed:test
