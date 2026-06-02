@@ -10,6 +10,37 @@ export interface User {
   updatedAt: Date;
 }
 
+// ─── Group Gift ───────────────────────────────────────────────────────────────
+export interface GroupContribution {
+  id: string;
+  groupGiftId: string;
+  contributorName: string;
+  contributorPhone?: string;
+  amountNgn: number;
+  paymentReference: string;
+  status: "pending" | "success" | "failed";
+  createdAt: Date;
+}
+
+export interface GroupGift {
+  id: string;
+  creatorId: string;
+  recipientPhone: string;
+  recipientName: string;
+  targetAmountNgn: number;
+  collectedAmountNgn: number;
+  message?: string;
+  unlockAt: Date;
+  deadline: Date;
+  status: "open" | "funded" | "locked" | "expired" | "cancelled";
+  contributions: GroupContribution[];
+  shareToken: string; // used in the shareable link
+  contractId?: string;
+  stellarTxHash?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // ─── Gift ─────────────────────────────────────────────────────────────────────
 export type OccasionCategory =
   | "general"
@@ -72,6 +103,8 @@ export type NotificationType =
   | "gift_received"
   | "gift_unlocked"
   | "gift_claimed"
+  | "payment_confirmed"
+  | "gift_expiring"
   | "otp"
   | "new_device_login"
   | "suspicious_login_reported";

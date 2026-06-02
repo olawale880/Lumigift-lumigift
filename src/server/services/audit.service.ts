@@ -27,6 +27,14 @@ export interface AuditLogEntry {
  * @param entry - The audit log entry to create
  * @returns The created audit log ID
  */
+/**
+ * Creates an audit log entry for a financial operation.
+ * This function is append‑only and should be called atomically with the main operation.
+ *
+ * @param {AuditLogEntry} entry - The audit log entry to create.
+ * @returns {Promise<string>} The created audit log ID.
+ * @throws {Error} If the database insert fails.
+ */
 export async function createAuditLog(entry: AuditLogEntry): Promise<string> {
   const {
     eventType,
@@ -91,10 +99,11 @@ export interface AuditLogResult {
 
 /**
  * Queries audit logs with optional filters.
- * Used by admin interface for compliance and dispute resolution.
+ * Used by the admin interface for compliance and dispute resolution.
  *
- * @param query - Filter criteria for audit logs
- * @returns Array of matching audit log entries
+ * @param {AuditLogQuery} query - Filter criteria for audit logs.
+ * @returns {Promise<{ logs: AuditLogResult[]; total: number }>} An object containing matching logs and total count.
+ * @throws {Error} If the database query fails.
  */
 export async function queryAuditLogs(
   query: AuditLogQuery

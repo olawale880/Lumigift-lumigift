@@ -147,12 +147,21 @@ export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardPro
         </div>
       )}
 
-      {showCancelModal && (
-        <CancelGiftModal
-          giftId={gift.id}
-          onClose={() => setShowCancelModal(false)}
-          onSuccess={() => setStatus("cancelled")}
-        />
+      {perspective === "sender" && (
+        <div
+          className={styles.meta}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <a
+            href={`/api/v1/gifts/${gift.id}/receipt`}
+            download={`lumigift-receipt-${gift.id}.pdf`}
+            className="btn btn--ghost btn--sm"
+            aria-label="Download PDF receipt"
+          >
+            ↓ Receipt
+          </a>
+        </div>
       )}
     </article>
   );
