@@ -103,6 +103,8 @@ export type NotificationType =
   | "gift_received"
   | "gift_unlocked"
   | "gift_claimed"
+  | "payment_confirmed"
+  | "gift_expiring"
   | "otp"
   | "new_device_login"
   | "suspicious_login_reported";
