@@ -9,6 +9,10 @@ import { getCountryFromIp } from "@/lib/device";
 import { createHash } from "crypto";
 import { normalizePhone } from "@/lib/phone";
 import { verifyOtp } from "@/lib/otp";
+import { serviceLogger } from "@/lib/logger";
+import { jwtRotationOptions } from "@/lib/jwt-rotation";
+
+const log = serviceLogger("auth");
 
 function fingerprintFromHeaders(ua: string, lang: string, enc: string): string {
   return createHash("sha256").update(`${ua}|${lang}|${enc}`).digest("hex");
@@ -40,7 +44,7 @@ async function handleDeviceCheck(
 
     // Fire-and-forget — don't block login on SMS failure
     sendNewDeviceAlert(phone, { time, country, reportUrl }).catch((err) =>
-      console.error("[auth] sendNewDeviceAlert failed:", err)
+      log.error({ err }, "sendNewDeviceAlert failed")
     );
   } else {
     // Known device — refresh last_seen_at
@@ -51,11 +55,48 @@ async function handleDeviceCheck(
   }
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
+// Cookie security flags — enforced in production, relaxed locally so HTTP dev
+// server works without HTTPS.
+const secureCookieOptions = {
+  httpOnly: true,
+  sameSite: "strict" as const,
+  secure: isProd,
+  path: "/",
+};
+
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
+  jwt: jwtRotationOptions,
   pages: {
     signIn: "/auth/login",
     error: "/auth/error",
+  },
+  cookies: {
+    sessionToken: {
+      name: isProd
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: secureCookieOptions,
+    },
+    callbackUrl: {
+      name: isProd
+        ? "__Secure-next-auth.callback-url"
+        : "next-auth.callback-url",
+      options: secureCookieOptions,
+    },
+    csrfToken: {
+      // CSRF token must be readable by the login form JS, so HttpOnly is false.
+      // It is still Secure + SameSite=Strict in production.
+      name: isProd
+        ? "__Host-next-auth.csrf-token"
+        : "next-auth.csrf-token",
+      options: {
+        ...secureCookieOptions,
+        httpOnly: false,
+      },
+    },
   },
   providers: [
     CredentialsProvider({
@@ -68,13 +109,11 @@ export const authOptions: NextAuthOptions = {
         const parsed = verifyOtpSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        // parsed.data.phone is already E.164 (normalized by the Zod schema)
         const phone = normalizePhone(parsed.data.phone);
         if (!phone) return null;
 
         const result = await verifyOtp(phone, parsed.data.otp);
         if (!result.success) {
-          // Throw so NextAuth surfaces the message; locked === true means HTTP 429 semantics.
           throw new Error(result.message);
         }
 
@@ -85,9 +124,8 @@ export const authOptions: NextAuthOptions = {
         if (rows.length === 0) return null;
         const user = rows[0];
 
-        // Device fingerprint check
         try {
-          const reqHeaders = headers();
+          const reqHeaders = await headers();
           const ua = reqHeaders.get("user-agent") ?? "";
           const lang = reqHeaders.get("accept-language") ?? "";
           const enc = reqHeaders.get("accept-encoding") ?? "";
@@ -98,7 +136,7 @@ export const authOptions: NextAuthOptions = {
           await handleDeviceCheck(user.id, user.phone, fingerprint, ip);
         } catch (err) {
           // Never block login due to device-check errors
-          console.error("[auth] device check error:", err);
+          log.error({ err }, "device check error");
         }
 
         return user;
@@ -107,18 +145,54 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
+      // Initial sign in
       if (user) {
-        token.id = user.id;
-        token.phone = (user as { phone?: string }).phone;
+        const refreshToken = await createRefreshToken(user.id);
+        return {
+          id: user.id,
+          phone: (user as { phone?: string }).phone,
+          accessTokenExpires: Date.now() + 15 * 60 * 1000, // 15 minutes
+          refreshToken,
+        };
       }
-      return token;
+
+      // Return previous token if the access token has not expired yet
+      if (Date.now() < (token.accessTokenExpires as number)) {
+        return token;
+      }
+
+      // Access token has expired, try to rotate the refresh token
+      console.log(`[auth] Rotating refresh token for user ${token.id}`);
+      const newToken = await rotateRefreshToken(
+        token.refreshToken as string,
+        token.id as string
+      );
+
+      if (!newToken) {
+        console.warn(`[auth] Refresh token rotation failed for user ${token.id}`);
+        return { ...token, error: "RefreshAccessTokenError" };
+      }
+
+      return {
+        ...token,
+        accessTokenExpires: Date.now() + 15 * 60 * 1000,
+        refreshToken: newToken,
+      };
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { id?: string }).id = token.id as string;
-        (session.user as { phone?: string }).phone = token.phone as string;
+        (session.user as any).id = token.id as string;
+        (session.user as any).phone = token.phone as string;
+        (session.user as any).error = token.error;
       }
       return session;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      if (token?.id) {
+        await revokeAllUserTokens(token.id as string);
+      }
     },
   },
 };

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import { constructStripeEvent } from "@/lib/stripe";
 import { updateGiftStatus } from "@/server/services/gift.service";
+import { getRedisClient } from "@/lib/redis";
 import type { ApiResponse } from "@/types";
+import type Stripe from "stripe";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 if (!webhookSecret) {
@@ -9,11 +11,11 @@ if (!webhookSecret) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2024-06-20",
+  apiVersion: "2026-05-27.dahlia",
 });
 
 // Next.js must not parse the body — Stripe needs the raw bytes for signature verification.
-export const config = { api: { bodyParser: false } };
+// In App Router, request body is not pre-parsed, so no config needed.
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature");
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event;
   try {
     const rawBody = await req.text();
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret!);
+    event = constructStripeEvent(rawBody, sig);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid signature";
     return NextResponse.json<ApiResponse<never>>(
@@ -36,14 +38,51 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (event.type === "payment_intent.succeeded") {
-    const intent = event.data.object as Stripe.PaymentIntent;
-    const giftId = intent.metadata?.giftId;
-    if (giftId) await updateGiftStatus(giftId, "locked");
+  const redis = await getRedisClient();
+  const idempotencyKey = `stripe:event:${event.id}`;
+
+  // Return 200 immediately for already-processed events
+  const alreadyProcessed = await redis.get(idempotencyKey);
+  if (alreadyProcessed) {
+    return NextResponse.json({ success: true, data: { received: true } });
   }
 
-  return NextResponse.json<ApiResponse<{ received: boolean }>>({
-    success: true,
-    data: { received: true },
-  });
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as any;
+        const giftId = session.metadata?.giftId;
+        if (giftId) {
+          await updateGiftStatus(giftId, "locked");
+          console.log(`[stripe] Gift ${giftId} funded successfully via Stripe.`);
+        }
+        break;
+      }
+      case "checkout.session.async_payment_failed":
+      case "payment_intent.payment_failed": {
+        const obj = event.data.object as any;
+        const giftId = obj.metadata?.giftId;
+        if (giftId) {
+          // We might want a "payment_failed" status or just leave it as "pending_payment"
+          // but the state machine might have thoughts.
+          console.warn(`[stripe] Payment failed for gift ${giftId}`);
+        }
+        break;
+      }
+    }
+
+    // Mark event as processed
+    await redis.set(idempotencyKey, "1", { EX: IDEMPOTENCY_TTL_SECONDS });
+
+    return NextResponse.json<ApiResponse<{ received: boolean }>>({
+      success: true,
+      data: { received: true },
+    });
+  } catch (err: any) {
+    console.error(`[stripe] Webhook handler error: ${err.message}`);
+    return NextResponse.json<ApiResponse<never>>(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 }
