@@ -201,9 +201,21 @@ npm run contract:build
 # Run Rust tests
 npm run contract:test
 
-# Deploy to testnet
+# Deploy to testnet (idempotent — skips if already deployed)
 STELLAR_NETWORK=testnet npm run contract:deploy
+
+# Verify the deployed contract
+STELLAR_NETWORK=testnet npm run contract:verify
 ```
+
+### Deployed Contract Addresses
+
+| Network | Contract ID |
+|---------|-------------|
+| **Testnet** | [`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCN4`](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCN4) |
+| **Mainnet** | _not yet deployed_ |
+
+See [docs/ops/contract-deployment.md](docs/ops/contract-deployment.md) for the full deployment guide.
 
 ---
 
