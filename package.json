@@ -37,8 +37,8 @@
     "contract:bindings": "npm run contract:build && ts-node scripts/generate-bindings.ts",
     "license:check": "license-checker --production --failOn 'GPL;AGPL;LGPL;GPL-2.0;GPL-3.0;AGPL-3.0;LGPL-2.0;LGPL-2.1;LGPL-3.0' --excludePrivatePackages",
     "e2e": "playwright test",
-    "db:migrate": "ts-node scripts/run-migrations.ts",
-    "db:rollback": "ts-node scripts/rollback-migration.ts",
+    "db:migrate": "node-pg-migrate up",
+    "db:rollback": "node-pg-migrate down",
     "db:seed:test": "ts-node scripts/seed-test-db.ts",
     "test:visual": "playwright test --config=playwright.visual.config.ts",
     "test:visual:update": "playwright test --config=playwright.visual.config.ts --update-snapshots",
@@ -53,7 +53,9 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.530.0",
     "@hookform/resolvers": "^5.4.0",
+    "@react-pdf/renderer": "4.3.0",
     "@sentry/nextjs": "10.54.0",
     "@stellar/stellar-sdk": "^15.1.0",
     "@tanstack/react-query": "^5.100.14",
@@ -75,11 +77,14 @@
     "redis": "^5.12.1",
     "resend": "^6.12.4",
     "stripe": "^22.2.0",
-    "zod": "^4.4.3",
-    "@aws-sdk/client-secrets-manager": "^3.530.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",
+    "@storybook/addon-a11y": "^8.6.12",
+    "@storybook/addon-essentials": "^8.6.12",
+    "@storybook/nextjs": "^8.6.12",
+    "@storybook/react": "^8.6.12",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.4.6",
     "@testing-library/react": "^16.0.0",
@@ -89,6 +94,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "chromatic": "^11.28.1",
     "eslint": "^10.4.0",
     "eslint-config-next": "16.2.6",
     "eslint-config-prettier": "^10.1.8",
@@ -100,15 +106,10 @@
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "react-dom": "^19.2.6",
+    "storybook": "^8.6.12",
     "ts-node": "^10.9.2",
     "typedoc": "^0.28.19",
-    "typescript": "^6.0.3",
-    "@storybook/addon-a11y": "^8.6.12",
-    "@storybook/addon-essentials": "^8.6.12",
-    "@storybook/nextjs": "^8.6.12",
-    "@storybook/react": "^8.6.12",
-    "chromatic": "^11.28.1",
-    "storybook": "^8.6.12"
+    "typescript": "^6.0.3"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

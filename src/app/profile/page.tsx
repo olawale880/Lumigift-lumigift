@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatNGN } from "@/lib/currency";
 import { useCsrf } from "@/hooks/useCsrf";
+import { useOnboarding } from "@/hooks/useOnboarding";
+import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
 import type { ApiResponse, Gift } from "@/types";
 import type { ProfileStats } from "@/app/api/v1/profile/route";
 import styles from "./page.module.css";
@@ -24,6 +26,7 @@ async function fetchProfile(): Promise<ProfileData> {
 export default function ProfilePage() {
   const queryClient = useQueryClient();
   const { csrfFetch } = useCsrf();
+  const { show: showOnboarding, complete: completeOnboarding, skip: skipOnboarding, retrigger } = useOnboarding();
   const [displayName, setDisplayName] = useState("");
   const [smsNotif, setSmsNotif] = useState(true);
   const [emailNotif, setEmailNotif] = useState(true);
@@ -92,6 +95,9 @@ export default function ProfilePage() {
 
   return (
     <div className={styles.page}>
+      {showOnboarding && (
+        <OnboardingModal onComplete={completeOnboarding} onSkip={skipOnboarding} />
+      )}
       <div className="container">
         <div className={styles.header}>
           <h1 className={styles.title}>My Profile</h1>
@@ -204,6 +210,17 @@ export default function ProfilePage() {
               ))}
             </ul>
           )}
+        </section>
+
+        {/* ── Onboarding ────────────────────────────────────────────────── */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Onboarding</h2>
+          <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginBottom: "var(--space-4)" }}>
+            Replay the getting-started guide at any time.
+          </p>
+          <Button variant="secondary" onClick={retrigger}>
+            Replay onboarding
+          </Button>
         </section>
 
         {/* ── Danger Zone ───────────────────────────────────────────────── */}
