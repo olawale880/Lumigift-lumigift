@@ -1,14 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import type { Gift } from "@/types";
+import type { Gift, GiftStatus } from "@/types";
 import { GiftStatusBadge } from "@/components/ui/GiftStatusBadge";
+import { formatNGN } from "@/lib/currency";
+import { ClaimButton } from "./ClaimButton";
+import { ShareGift } from "./ShareGift";
+import { CancelGiftModal } from "./CancelGiftModal";
 import styles from "./GiftCard.module.css";
 
 interface GiftCardProps {
   gift: Gift;
   perspective: "sender" | "recipient";
+  /** Recipient's Stellar public key — required when perspective="recipient" to enable claiming */
+  recipientStellarKey?: string;
 }
 
 const EXPLORER_BASE = "https://stellar.expert/explorer/testnet/tx";
@@ -17,16 +24,16 @@ function explorerUrl(txHash: string) {
   return `${EXPLORER_BASE}/${txHash}`;
 }
 
-export function GiftCard({ gift, perspective }: GiftCardProps) {
+export function GiftCard({ gift, perspective, recipientStellarKey }: GiftCardProps) {
   const router = useRouter();
-  const isLocked = gift.status === "locked";
+  const [status, setStatus] = useState<GiftStatus>(gift.status);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const isLocked = status === "locked";
   const name =
     perspective === "sender" ? `To: ${gift.recipientName}` : "A gift for you";
 
   const amountLabel =
-    isLocked && perspective === "recipient"
-      ? "amount hidden"
-      : `₦${gift.amountNgn.toLocaleString("en-NG")}`;
+    isLocked && perspective === "recipient" ? "amount hidden" : formatNGN(gift.amountNgn);
 
   const unlockLabel = `${isLocked ? "Unlocks" : "Unlocked"} ${format(
     new Date(gift.unlockAt),
@@ -37,7 +44,7 @@ export function GiftCard({ gift, perspective }: GiftCardProps) {
     name,
     amountLabel,
     unlockLabel,
-    gift.status,
+    status,
   ].join(", ");
 
   const handleActivate = () => {
@@ -62,14 +69,14 @@ export function GiftCard({ gift, perspective }: GiftCardProps) {
     >
       <div className={styles.header}>
         <span className={styles.name}>{name}</span>
-        <GiftStatusBadge status={gift.status} />
+        <GiftStatusBadge status={status} />
       </div>
 
       <div className={styles.amount} aria-hidden="true">
         {isLocked && perspective === "recipient" ? (
           <span className={styles.hidden}>₦ ••••••</span>
         ) : (
-          <span>₦{gift.amountNgn.toLocaleString("en-NG")}</span>
+          <span>{formatNGN(gift.amountNgn)}</span>
         )}
       </div>
 
@@ -79,6 +86,13 @@ export function GiftCard({ gift, perspective }: GiftCardProps) {
 
       {gift.message && !isLocked && (
         <p className={styles.message}>{gift.message}</p>
+      )}
+
+      {gift.voiceNoteUrl && !isLocked && (
+        <div className={styles.voiceNote}>
+          <span className={styles.voiceNoteLabel}>Voice note</span>
+          <audio src={gift.voiceNoteUrl} controls className={styles.voiceNotePlayer} aria-label="Gift voice note" />
+        </div>
       )}
 
       {gift.stellarTxHash && (
@@ -103,6 +117,49 @@ export function GiftCard({ gift, perspective }: GiftCardProps) {
             rel="noopener noreferrer"
           >
             {gift.claimTxHash.slice(0, 8)}…
+          </a>
+        </div>
+      )}
+
+      {perspective === "recipient" && status === "unlocked" && recipientStellarKey && (
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <ClaimButton
+            giftId={gift.id}
+            recipientStellarKey={recipientStellarKey}
+            onStatusChange={setStatus}
+          />
+        </div>
+      )}
+
+      {perspective === "sender" && (status === "locked" || status === "funded") && (
+        <div
+          className={styles.actions}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <ShareGift giftId={gift.id} recipientName={gift.recipientName} />
+          <button
+            className="btn btn--secondary btn--sm"
+            onClick={() => setShowCancelModal(true)}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {perspective === "sender" && (
+        <div
+          className={styles.meta}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <a
+            href={`/api/v1/gifts/${gift.id}/receipt`}
+            download={`lumigift-receipt-${gift.id}.pdf`}
+            className="btn btn--ghost btn--sm"
+            aria-label="Download PDF receipt"
+          >
+            ↓ Receipt
           </a>
         </div>
       )}
