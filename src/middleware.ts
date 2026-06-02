@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 
 export function middleware(request: NextRequest) {
+  const correlationId = request.headers.get("x-correlation-id") || randomUUID();
   const nonce = randomBytes(16).toString("base64");
   const cspHeader = buildCspHeader(nonce);
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("x-correlation-id", correlationId);
   requestHeaders.set("Content-Security-Policy", cspHeader);
 
   const response = NextResponse.next({
@@ -17,6 +19,7 @@ export function middleware(request: NextRequest) {
   });
 
   response.headers.set("Content-Security-Policy", cspHeader);
+  response.headers.set("x-correlation-id", correlationId);
 
   return response;
 }
