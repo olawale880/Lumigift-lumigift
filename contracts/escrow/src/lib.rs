@@ -2,6 +2,7 @@
 //!
 //! Locks USDC for a recipient until a predetermined timestamp.
 //! Only the designated recipient can claim after the unlock time.
+//! The sender may cancel and reclaim funds at any time before the recipient claims.
 //!
 //! # Admin Multisig
 //!
@@ -126,6 +127,9 @@ pub enum TempKey {
 #[contracttype]
 pub enum PersistentKey {
     Claimed,
+    Cancelled,
+    /// Stores the whitelisted USDC address supplied at initialization
+    ExpectedUsdc,
 }
 
 // ─── Contract ─────────────────────────────────────────────────────────────────
@@ -205,6 +209,7 @@ impl EscrowContract {
         signers: Vec<Address>,
         threshold: u32,
     ) -> Result<(), EscrowError> {
+        // ── Re-initialization guard ──────────────────────────────────────────
         if env.storage().instance().has(&DataKey::Sender) {
             return Err(EscrowError::AlreadyInitialized);
         }
@@ -234,6 +239,12 @@ impl EscrowContract {
             panic!("contract is paused");
         }
 
+        // ── Unlock time must be in the future (FIX: missing validation) ─────
+        if unlock_time <= env.ledger().timestamp() {
+            return Err(EscrowError::InvalidUnlockTime);
+        }
+
+        // ── Authorisation ────────────────────────────────────────────────────
         sender.require_auth();
 
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -251,6 +262,7 @@ impl EscrowContract {
         let ttl = required_ttl_ledgers(&env, unlock_time);
         env.storage().instance().extend_ttl(MIN_TTL_THRESHOLD, ttl);
 
+        // ── Pull funds into escrow (CEI: state written before external call) ─
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&sender, &env.current_contract_address(), &amount);
 
@@ -273,6 +285,17 @@ impl EscrowContract {
 
         recipient.require_auth();
 
+        // ── Guard: already cancelled ─────────────────────────────────────────
+        let cancelled: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Cancelled)
+            .unwrap_or(false);
+        if cancelled {
+            return Err(EscrowError::AlreadyCancelled);
+        }
+
+        // ── Guard: already claimed ───────────────────────────────────────────
         let claimed: bool = env
             .storage()
             .persistent()
@@ -493,8 +516,13 @@ impl EscrowContract {
             .persistent()
             .get(&DataKey::Claimed)
             .unwrap_or(false);
+        let cancelled: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Cancelled)
+            .unwrap_or(false);
 
-        Ok((recipient, amount, unlock_time, claimed))
+        Ok((recipient, amount, unlock_time, claimed, cancelled))
     }
 
     /// Migrate on-chain storage when upgrading to a new contract layout.
@@ -786,6 +814,18 @@ mod tests {
         let client = EscrowContractClient::new(env, &contract_id);
 
         (sender, recipient, token_id, token, client)
+    }
+
+    /// Helper: initialize with a future unlock_time (ledger starts at 0, so 1_000 is fine).
+    fn do_initialize(
+        client: &EscrowContractClient,
+        sender: &Address,
+        recipient: &Address,
+        token_id: &Address,
+        amount: i128,
+        unlock_time: u64,
+    ) {
+        client.initialize(sender, recipient, token_id, &amount, &unlock_time, token_id);
     }
 
     #[test]
