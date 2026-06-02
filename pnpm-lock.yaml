@@ -30,7 +30,7 @@ importers:
         specifier: ^1.16.1
         version: 1.16.1
       bullmq:
-        specifier: ^5.56.0
+        specifier: ^5.78.0
         version: 5.78.0(redis@5.12.1(@opentelemetry/api@1.9.1))
       canvas-confetti:
         specifier: ^1.9.4
