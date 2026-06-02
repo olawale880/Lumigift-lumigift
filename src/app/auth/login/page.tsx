@@ -11,13 +11,29 @@ import styles from "./page.module.css";
 
 type Step = "phone" | "otp";
 
+function validatePhone(value: string): string | undefined {
+  if (!value) return "Phone number is required";
+  if (!/^\+?[1-9]\d{9,14}$/.test(value)) return "Enter a valid phone number (e.g. +2348012345678)";
+}
+
+function validateOtp(value: string): string | undefined {
+  if (!value) return "OTP is required";
+  if (!/^\d{6}$/.test(value)) return "OTP must be exactly 6 digits";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const phoneValidation = useValidation(["phone"]);
+  const otpValidation = useValidation(["otp"]);
+
+  const phoneError = phoneValidation.isTouched("phone") ? validatePhone(phone) : undefined;
+  const otpError = otpValidation.isTouched("otp") ? validateOtp(otp) : undefined;
 
   const { csrfFetch } = useCsrf();
   const errorId = useId();
@@ -25,8 +41,10 @@ export default function LoginPage() {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    phoneValidation.touchAll();
+    if (validatePhone(phone)) return;
     setLoading(true);
-    setError(null);
+    setSubmitError(null);
     try {
       const res = await csrfFetch("/api/v1/auth/send-otp", {
         method: "POST",
@@ -37,7 +55,7 @@ export default function LoginPage() {
       if (!json.success) throw new Error(json.error);
       setStep("otp");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send OTP");
+      setSubmitError(err instanceof Error ? err.message : "Failed to send OTP");
     } finally {
       setLoading(false);
     }
@@ -45,18 +63,16 @@ export default function LoginPage() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    otpValidation.touchAll();
+    if (validateOtp(otp)) return;
     setLoading(true);
-    setError(null);
+    setSubmitError(null);
     try {
-      const result = await signIn("credentials", {
-        phone,
-        otp,
-        redirect: false,
-      });
+      const result = await signIn("credentials", { phone, otp, redirect: false });
       if (result?.error) throw new Error("Invalid OTP. Please try again.");
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Verification failed");
+      setSubmitError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setLoading(false);
     }
@@ -71,10 +87,14 @@ export default function LoginPage() {
     <div className={styles.page}>
       <div className={`container container--sm ${styles.inner}`}>
         <div className="card">
-          {/* Live region announces step changes to screen readers */}
           <p id={statusId} className="sr-only" aria-live="polite" aria-atomic="true">
             {stepLabel}
           </p>
+
+          {/* ARIA live region for inline field errors */}
+          <div aria-live="polite" aria-atomic="true" className="sr-only">
+            {phoneError ?? otpError ?? submitError ?? ""}
+          </div>
 
           <h1 className={styles.title}>
             {step === "phone" ? "Sign in to Lumigift" : "Enter your OTP"}
@@ -99,12 +119,16 @@ export default function LoginPage() {
                 placeholder="+2348012345678"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                required
+                onBlur={() => phoneValidation.onBlur("phone")}
                 autoComplete="tel"
-                aria-label="Phone number in international format, e.g. +2348012345678"
-                error={error ?? undefined}
+                error={phoneError ?? submitError ?? undefined}
               />
-              <Button type="submit" fullWidth loading={loading}>
+              <Button
+                type="submit"
+                fullWidth
+                loading={loading}
+                disabled={loading || !!validatePhone(phone)}
+              >
                 Send Code
               </Button>
             </form>
@@ -122,18 +146,12 @@ export default function LoginPage() {
                 error={error ?? undefined}
                 disabled={loading}
               />
-              {/* Standalone error for the OTP step (also surfaced via Input's error prop above) */}
-              {error && (
-                <p
-                  id={errorId}
-                  className={styles.error}
-                  role="alert"
-                  aria-live="assertive"
-                >
-                  {error}
-                </p>
-              )}
-              <Button type="submit" fullWidth loading={loading}>
+              <Button
+                type="submit"
+                fullWidth
+                loading={loading}
+                disabled={loading || !!validateOtp(otp)}
+              >
                 Verify &amp; Sign In
               </Button>
               <button
@@ -141,7 +159,7 @@ export default function LoginPage() {
                 className="btn btn--ghost btn--sm btn--full"
                 onClick={() => {
                   setStep("phone");
-                  setError(null);
+                  setSubmitError(null);
                 }}
                 aria-label="Go back and change your phone number"
               >
