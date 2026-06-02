@@ -5,6 +5,7 @@ import Script from "next/script";
 import "@/styles/globals.css";
 import "@/styles/components.css";
 import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
 import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -52,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Providers>
           <Navbar />
           <main>{children}</main>
+          <Footer />
         </Providers>
       </body>
     </html>
