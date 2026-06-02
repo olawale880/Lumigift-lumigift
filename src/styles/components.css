@@ -151,3 +151,39 @@
   background-color: rgba(239, 68, 68, 0.15);
   color: var(--color-error);
 }
+
+/* ─── Mobile Responsiveness ───────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Ensure touch-friendly button sizes on mobile */
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+    font-size: var(--text-base);
+  }
+
+  .btn--full {
+    width: 100%;
+  }
+
+  /* Ensure inputs have proper touch target height */
+  .input {
+    min-height: 44px;
+    font-size: var(--text-base);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  /* Improve spacing on mobile */
+  .input-group {
+    gap: var(--space-3);
+  }
+
+  /* Adjust card padding for small screens */
+  .card {
+    padding: var(--space-4);
+  }
+
+  /* Make numeric input show numeric keyboard on iOS */
+  input[type="number"] {
+    font-size: var(--text-base);
+  }
+}
