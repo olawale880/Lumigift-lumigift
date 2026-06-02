@@ -787,6 +787,47 @@ impl EscrowContract {
         let max_amount = get_max_amount(&env);
         (min_amount, max_amount)
     }
+
+    /// Extend the unlock date. Only the original sender may call this,
+    /// and `new_unlock_at` must be strictly later than the current unlock time.
+    pub fn extend_unlock(env: Env, new_unlock_at: u64) -> Result<(), EscrowError> {
+        let sender: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Sender)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        sender.require_auth();
+
+        let claimed: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Claimed)
+            .unwrap_or(false);
+
+        if claimed {
+            return Err(EscrowError::AlreadyClaimed);
+        }
+
+        let current_unlock: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::UnlockTime)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        if new_unlock_at <= current_unlock {
+            return Err(EscrowError::UnlockNotExtended);
+        }
+
+        env.storage().instance().set(&DataKey::UnlockTime, &new_unlock_at);
+
+        env.events().publish(
+            (Symbol::new(&env, "unlock_extended"),),
+            (sender, current_unlock, new_unlock_at),
+        );
+
+        Ok(())
+    }
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
