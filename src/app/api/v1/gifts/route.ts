@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import {
-  createGiftSchema,
-  giftsQuerySchema,
-} from "@/lib/schemas";
+import { createGiftSchema, giftsQuerySchema } from "@/lib/schemas";
 import {
   createGift,
   getGiftsBySenderPaginated,
   getGiftsBySenderPage,
 } from "@/server/services/gift.service";
-import { withErrorHandler, withCsrf, validateRequest, searchParamsToObject } from "@/server/middleware";
+import { checkRapidGiftCreation } from "@/server/services/account-takeover.service";
+import {
+  withErrorHandler,
+  withCsrf,
+  validateRequest,
+  searchParamsToObject,
+} from "@/server/middleware";
 import type { ApiResponse, Gift } from "@/types";
 import type { GiftPage, GiftPageOffset } from "@/server/services/gift.service";
 
@@ -34,7 +37,11 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   const { page, limit, status, cursor, pageSize } = validation.data;
 
   // Offset-based pagination (page + limit)
-  if (req.nextUrl.searchParams.has("page") || req.nextUrl.searchParams.has("limit") || req.nextUrl.searchParams.has("status")) {
+  if (
+    req.nextUrl.searchParams.has("page") ||
+    req.nextUrl.searchParams.has("limit") ||
+    req.nextUrl.searchParams.has("status")
+  ) {
     const result = await getGiftsBySenderPage(userId, page, limit, status);
     return NextResponse.json<ApiResponse<GiftPageOffset>>({ success: true, data: result });
   }
@@ -44,29 +51,34 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   return NextResponse.json<ApiResponse<GiftPage>>({ success: true, data: page2 });
 });
 
-export const POST = withErrorHandler(withCsrf(async (req: NextRequest) => {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
+export const POST = withErrorHandler(
+  withCsrf(async (req: NextRequest) => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // ── Validate request body ────────────────────────────────────────────────
+    const body = await req.json().catch(() => ({}));
+    const validation = validateRequest(createGiftSchema, body);
+    if (!validation.success) return validation.errorResponse;
+
+    const userId = (session.user as { id: string }).id;
+    const { gift, paymentUrl } = await createGift(
+      userId,
+      validation.data,
+      validation.data.recipientIsRegistered
     );
-  }
 
-  // ── Validate request body ────────────────────────────────────────────────
-  const body = await req.json().catch(() => ({}));
-  const validation = validateRequest(createGiftSchema, body);
-  if (!validation.success) return validation.errorResponse;
+    // Check for rapid gift creation (account takeover indicator)
+    await checkRapidGiftCreation(userId).catch(() => {});
 
-  const userId = (session.user as { id: string }).id;
-  const { gift, paymentUrl } = await createGift(
-    userId,
-    validation.data,
-    validation.data.recipientIsRegistered
-  );
-
-  return NextResponse.json<ApiResponse<{ gift: Gift; paymentUrl: string }>>(
-    { success: true, data: { gift, paymentUrl } },
-    { status: 201 }
-  );
-}));
+    return NextResponse.json<ApiResponse<{ gift: Gift; paymentUrl: string }>>(
+      { success: true, data: { gift, paymentUrl } },
+      { status: 201 }
+    );
+  })
+);
