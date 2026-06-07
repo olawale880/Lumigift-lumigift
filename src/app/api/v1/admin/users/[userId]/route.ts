@@ -8,7 +8,7 @@ function isAdmin(req: NextRequest): boolean {
 
 export const PATCH = async (
   req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) => {
   if (!isAdmin(req)) {
     return NextResponse.json<ApiResponse<never>>(
@@ -17,10 +17,11 @@ export const PATCH = async (
     );
   }
 
+  const { userId } = await params;
   const { banned } = await req.json() as { banned: boolean };
   await pool.query(
     `UPDATE users SET banned = $1, updated_at = NOW() WHERE id = $2`,
-    [banned, params.userId]
+    [banned, userId]
   );
 
   return NextResponse.json<ApiResponse<{ message: string }>>({

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import styles from "./page.module.css";
 import { HeroCTA } from "@/components/ab-testing/HeroCTA";
+import { getPlatformStats } from "@/server/services/gift.service";
 
 export const metadata: Metadata = {
   title: "Lumigift — Time-Locked Cash Gifts on Stellar",

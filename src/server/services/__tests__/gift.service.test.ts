@@ -152,6 +152,7 @@ describe("createGift", () => {
       amountUsdc: "624.375",
       unlockAt: new Date(Date.now() + 86_400_000),
       status: "pending_payment",
+      occasion: "general",
       createdAt: new Date(), // today
       updatedAt: new Date(),
     } as Gift);
@@ -173,6 +174,7 @@ describe("createGift", () => {
       amountUsdc: "624.375",
       unlockAt: new Date(Date.now() + 86_400_000),
       status: "pending_payment",
+      occasion: "general",
       createdAt: yesterday,
       updatedAt: yesterday,
     } as Gift);

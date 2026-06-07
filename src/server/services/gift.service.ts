@@ -445,6 +445,28 @@ export async function getAllGifts(): Promise<Gift[]> {
 }
 
 /**
+ * Calculates aggregated platform-wide statistics for the landing page.
+ * Results are currently derived from the in-memory store; in production,
+ * these should be cached (e.g. in Redis) and refreshed periodically.
+ *
+ * @returns An object with total gifts sent and total NGN value gifted.
+ */
+export async function getPlatformStats(): Promise<{
+  totalGiftsSent: number;
+  totalValueNgn: number;
+}> {
+  const allGifts = await getAllGifts();
+  const successfulGifts = allGifts.filter((g) =>
+    ["funded", "locked", "unlocked", "claimed"].includes(g.status)
+  );
+
+  const totalGiftsSent = successfulGifts.length;
+  const totalValueNgn = successfulGifts.reduce((sum, g) => sum + g.amountNgn, 0);
+
+  return { totalGiftsSent, totalValueNgn };
+}
+
+/**
  * Soft-deletes a gift by setting its `deletedAt` timestamp.
  * The record is preserved for audit purposes and can be restored.
  *

@@ -14,7 +14,7 @@ export { withCors } from "./cors";
 // Re-export validation helpers so callers can import from one place
 export { validateRequest, validationErrorResponse, formatZodErrors, searchParamsToObject } from "./validate";
 
-type Handler = (_req: NextRequest, _context?: unknown) => Promise<NextResponse>;
+type Handler = (_req: NextRequest, _context?: any) => Promise<NextResponse>;
 
 /** Wraps a route handler — returns 401 if no session. */
 export function withAuth(handler: Handler): Handler {

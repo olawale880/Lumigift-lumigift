@@ -91,7 +91,7 @@ export default function ProfilePage() {
     );
   }
 
-  const { stats, gifts } = data!;
+  const { stats, gifts } = data as ProfileData;
 
   return (
     <div className={styles.page}>
@@ -194,7 +194,7 @@ export default function ProfilePage() {
             <p className={styles.empty}>No gifts sent yet.</p>
           ) : (
             <ul className={styles.historyList} aria-label="Gift history">
-              {gifts.map((gift) => (
+              {gifts.map((gift: Gift) => (
                 <li key={gift.id} className={styles.historyItem}>
                   <div>
                     <div className={styles.historyName}>To: {gift.recipientName}</div>

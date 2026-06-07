@@ -38,7 +38,7 @@ function buildTransports(): PinoTransport | undefined {
   }
 
   const backend = process.env.LOG_BACKEND;
-  const targets: PinoTransport["targets"] = [
+  const targets: any[] = [
     // Always write JSON to stdout so container log drivers can capture it.
     { target: "pino/file", options: { destination: 1 }, level: "info" },
   ];

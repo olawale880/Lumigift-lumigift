@@ -5,8 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import styles from "./page.module.css";
 import type { ApiResponse } from "@/types";
 import type { AdminStats } from "@/app/api/v1/admin/stats/route";
-import type { AdminGiftsPage } from "@/app/api/v1/admin/gifts/route";
+import type { AdminGiftPage } from "@/server/services/admin-gift.service";
 import type { AdminUserRow } from "@/app/api/v1/admin/users/route";
+import type { Gift } from "@/types";
 
 const ADMIN_SECRET = process.env.NEXT_PUBLIC_ADMIN_SECRET ?? "";
 
@@ -21,11 +22,11 @@ async function fetchStats(): Promise<AdminStats> {
   return json.data;
 }
 
-async function fetchGifts(page: number, status: string): Promise<AdminGiftsPage> {
+async function fetchGifts(page: number, status: string): Promise<AdminGiftPage> {
   const params = new URLSearchParams({ page: String(page) });
   if (status) params.set("status", status);
   const res = await fetch(`/api/v1/admin/gifts?${params}`, { headers: adminHeaders() });
-  const json: ApiResponse<AdminGiftsPage> = await res.json();
+  const json: ApiResponse<AdminGiftPage> = await res.json();
   if (!json.success) throw new Error(json.error);
   return json.data;
 }
@@ -128,7 +129,7 @@ export default function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {giftsData?.gifts.map((g) => (
+                {giftsData?.gifts.map((g: any) => (
                   <tr key={g.id}>
                     <td title={g.id}>{g.id.slice(0, 8)}…</td>
                     <td>{g.sender_id.slice(0, 8)}…</td>

@@ -1,5 +1,6 @@
 import pool from "@/lib/db";
 import { updateGiftStatus } from "./gift.service";
+import { purgeOldAuditLogs } from "./audit.service";
 import { sendUsdcPayment } from "@/lib/stellar";
 import { sendGiftExpiredAlert } from "@/lib/sms";
 import { logger } from "@/lib/logger";

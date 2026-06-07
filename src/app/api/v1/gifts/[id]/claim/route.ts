@@ -24,13 +24,7 @@ export const POST = withErrorHandler(withCsrf(async (req: NextRequest) => {
 
   const gift = await getGiftById(validation.data.giftId);
   if (!gift) {
-    await logClaimAttempt({
-      giftId,
-      ipAddress: ip,
-      userAgent: ua,
-      outcome: "failed:not_found",
-      errorMessage: "Gift not found",
-    });
+    console.error(`[claim] Gift not found: ${validation.data.giftId}`);
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Gift not found" },
       { status: 404 }

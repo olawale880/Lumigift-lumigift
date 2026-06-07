@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { loadSecretManagerEnv } from "./secrets.ts";
+import { loadSecretManagerEnv } from "./secrets";
 
 if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
   await loadSecretManagerEnv();

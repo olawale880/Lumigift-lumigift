@@ -51,6 +51,7 @@ function makeGift(overrides: Partial<Gift> = {}): Gift {
     amountUsdc: "3.0000000",
     unlockAt: new Date(Date.now() - 1000), // already past
     status: "unlocked",
+    occasion: "general",
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

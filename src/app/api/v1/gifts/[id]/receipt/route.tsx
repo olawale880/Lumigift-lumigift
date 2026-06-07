@@ -41,14 +41,15 @@ const styles = StyleSheet.create({
 
 export async function GET(
   _req: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const gift = await getGiftById(context.params.id);
+  const gift = await getGiftById(id);
   if (!gift) {
     return NextResponse.json({ success: false, error: "Gift not found" }, { status: 404 });
   }
@@ -131,7 +132,7 @@ export async function GET(
 
   const buffer = await renderToBuffer(doc);
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",

@@ -171,6 +171,7 @@ export async function validateStellarAccount(
   }
 
   try {
+    const server = getHorizonServer();
     await server.loadAccount(publicKey);
     return { valid: true };
   } catch (err: unknown) {

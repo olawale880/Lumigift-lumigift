@@ -160,7 +160,7 @@ export function CreateGiftForm() {
 
   const onConfirm = async () => {
     setLoading(true);
-    setSubmitError(null);
+    setError(null);
     try {
       const data = getValues();
       const res = await csrfFetch("/api/v1/gifts", {

@@ -5,7 +5,7 @@ import { adminGetGift, logAdminAction } from "@/server/services/admin-gift.servi
 import { giftIdParamSchema } from "@/lib/schemas";
 import type { ApiResponse, Gift } from "@/types";
 
-export const GET = withErrorHandler(async (req: NextRequest, context: unknown) => {
+export const GET = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
 
@@ -17,8 +17,8 @@ export const GET = withErrorHandler(async (req: NextRequest, context: unknown) =
   }
 
   // ── Validate path param ──────────────────────────────────────────────────
-  const { params } = context as { params: { id: string } };
-  const paramValidation = validateRequest(giftIdParamSchema, params);
+  const resolvedParams = await params;
+  const paramValidation = validateRequest(giftIdParamSchema, resolvedParams);
   if (!paramValidation.success) return paramValidation.errorResponse;
 
   const gift = adminGetGift(paramValidation.data.id);

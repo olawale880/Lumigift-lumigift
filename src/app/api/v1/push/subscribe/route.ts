@@ -5,14 +5,15 @@ import { subscribeUserToPush } from "@/server/services/push-notifications.servic
 import { withErrorHandler, validateRequest } from "@/server/middleware";
 import type { ApiResponse } from "@/types";
 
-const subscribeSchema = {
-  endpoint: (val: unknown) => typeof val === "string" && val.length > 0,
-  keys: (val: unknown) => {
-    if (!val || typeof val !== "object") return false;
-    const k = val as Record<string, unknown>;
-    return typeof k.p256dh === "string" && typeof k.auth === "string";
-  },
-};
+import { z } from "zod";
+
+const subscribeSchema = z.object({
+  endpoint: z.string().url("endpoint must be a valid URL"),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+});
 
 async function handler(req: NextRequest): Promise<NextResponse> {
   const session = await getServerSession(authOptions);

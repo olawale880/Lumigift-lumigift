@@ -1,9 +1,16 @@
 import Stripe from "stripe";
 import { serverConfig } from "@/server/config";
 
-const stripe = new Stripe(serverConfig.stripe.secretKey, {
-  apiVersion: "2024-04-10" as any,
-});
+let stripeInstance: Stripe | null = null;
+
+function getStripeClient(): Stripe {
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(serverConfig.stripe.secretKey, {
+      apiVersion: "2026-05-27.dahlia",
+    });
+  }
+  return stripeInstance;
+}
 
 export interface CreateCheckoutSessionParams {
   email: string;
@@ -17,6 +24,7 @@ export interface CreateCheckoutSessionParams {
 
 /** Initialize a Stripe Checkout session. */
 export async function createCheckoutSession(params: CreateCheckoutSessionParams) {
+  const stripe = getStripeClient();
   const session = await stripe.checkout.sessions.create({
     customer_email: params.email,
     payment_method_types: ["card"],
@@ -48,6 +56,7 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
 
 /** Verify a Stripe webhook signature and return the event. */
 export function constructStripeEvent(payload: string, signature: string) {
+  const stripe = getStripeClient();
   return stripe.webhooks.constructEvent(
     payload,
     signature,

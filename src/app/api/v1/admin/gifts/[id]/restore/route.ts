@@ -7,7 +7,7 @@ import { giftIdParamSchema } from "@/lib/schemas";
 import type { ApiResponse, Gift } from "@/types";
 
 /** POST /api/v1/admin/gifts/[id]/restore — restore a soft-deleted gift */
-export const POST = withErrorHandler(async (_req: NextRequest, context: unknown) => {
+export const POST = withErrorHandler(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
 
@@ -18,8 +18,8 @@ export const POST = withErrorHandler(async (_req: NextRequest, context: unknown)
     );
   }
 
-  const { params } = context as { params: { id: string } };
-  const paramValidation = validateRequest(giftIdParamSchema, params);
+  const resolvedParams = await params;
+  const paramValidation = validateRequest(giftIdParamSchema, resolvedParams);
   if (!paramValidation.success) return paramValidation.errorResponse;
 
   const gift = adminGetGift(paramValidation.data.id);

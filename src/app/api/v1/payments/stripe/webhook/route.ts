@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import { constructStripeEvent } from "@/lib/stripe";
 import { updateGiftStatus } from "@/server/services/gift.service";
 import { getRedisClient } from "@/lib/redis";
+import { serverConfig } from "@/server/config";
 import type { ApiResponse } from "@/types";
-import type Stripe from "stripe";
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-if (!webhookSecret) {
-  throw new Error("Missing required environment variable: STRIPE_WEBHOOK_SECRET");
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2026-05-27.dahlia",
-});
+const IDEMPOTENCY_TTL_SECONDS = 86400; // 24 hours
 
 // Next.js must not parse the body — Stripe needs the raw bytes for signature verification.
 // In App Router, request body is not pre-parsed, so no config needed.
@@ -25,6 +19,18 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  const webhookSecret = serverConfig.stripe.webhookSecret;
+  if (!webhookSecret) {
+    return NextResponse.json<ApiResponse<never>>(
+      { success: false, error: "Stripe webhook secret not configured" },
+      { status: 500 }
+    );
+  }
+
+  const stripe = new Stripe(serverConfig.stripe.secretKey, {
+    apiVersion: "2026-05-27.dahlia",
+  });
 
   let event: Stripe.Event;
   try {

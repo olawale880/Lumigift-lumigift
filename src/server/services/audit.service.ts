@@ -187,3 +187,14 @@ export async function queryAuditLogs(
 
   return { logs, total };
 }
+
+/**
+ * Purges audit logs older than 90 days.
+ * @returns The number of rows deleted.
+ */
+export async function purgeOldAuditLogs(): Promise<number> {
+  const result = await pool.query(
+    "DELETE FROM audit_logs WHERE timestamp < NOW() - INTERVAL '90 days'"
+  );
+  return result.rowCount ?? 0;
+}

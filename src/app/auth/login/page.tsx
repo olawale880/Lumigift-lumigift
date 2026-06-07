@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { OtpInput } from "@/components/auth/OtpInput";
 import { useCsrf } from "@/hooks/useCsrf";
+import { useValidation } from "@/hooks/useValidation";
 import styles from "./page.module.css";
 
 type Step = "phone" | "otp";
@@ -143,7 +144,7 @@ export default function LoginPage() {
               <OtpInput
                 value={otp}
                 onChange={setOtp}
-                error={error ?? undefined}
+                error={otpError ?? submitError ?? undefined}
                 disabled={loading}
               />
               <Button

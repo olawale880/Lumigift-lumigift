@@ -5,9 +5,11 @@ import { recordLegalAcceptance, getLatestLegalDocument } from "@/server/services
 import { withErrorHandler, validateRequest } from "@/server/middleware";
 import type { ApiResponse } from "@/types";
 
-const acceptSchema = {
-  documentType: (val: unknown) => ["tos", "privacy"].includes(val as string),
-};
+import { z } from "zod";
+
+const acceptSchema = z.object({
+  documentType: z.enum(["tos", "privacy"]),
+});
 
 async function handler(req: NextRequest): Promise<NextResponse> {
   const session = await getServerSession(authOptions);

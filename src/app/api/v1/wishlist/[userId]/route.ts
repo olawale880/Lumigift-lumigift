@@ -6,9 +6,9 @@ import type { Wishlist } from "@/server/services/wishlist.service";
 
 export const GET = withErrorHandler(async (
   _req: NextRequest,
-  context: unknown
+  { params }: { params: Promise<{ userId: string }> }
 ) => {
-  const { userId } = (context as { params: { userId: string } }).params;
+  const { userId } = await params;
   const wishlist = await getPublicWishlistByUserId(userId);
   if (!wishlist) {
     return NextResponse.json<ApiResponse<never>>(

@@ -41,7 +41,7 @@ export function withCors(handler: (req: NextRequest) => Promise<NextResponse>): 
       return new NextResponse(null, {
         status: 204,
         headers: {
-          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Origin": origin || "",
           "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CSRF-Token",
           "Access-Control-Max-Age": "86400", // 24 hours
@@ -62,7 +62,7 @@ export function withCors(handler: (req: NextRequest) => Promise<NextResponse>): 
     const response = await handler(req);
 
     // Add CORS headers to response
-    response.headers.set("Access-Control-Allow-Origin", origin);
+    response.headers.set("Access-Control-Allow-Origin", origin || "");
     response.headers.set("Access-Control-Allow-Credentials", "true");
     response.headers.set("Access-Control-Expose-Headers", "Content-Length, X-API-Version, x-correlation-id");
 

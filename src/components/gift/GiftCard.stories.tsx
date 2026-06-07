@@ -25,6 +25,7 @@ const BASE_GIFT: Gift = {
   amountNgn: 10000,
   amountUsdc: "6.0000000",
   status: "locked",
+  occasion: "general",
   unlockAt: new Date("2026-12-25T10:00:00Z"),
   createdAt: new Date("2026-05-01"),
   updatedAt: new Date("2026-05-01"),

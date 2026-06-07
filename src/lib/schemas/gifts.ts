@@ -116,3 +116,36 @@ export const claimGiftSchema = z.object({
 });
 
 export type ClaimGiftInput = z.infer<typeof claimGiftSchema>;
+
+// ─── Group Gifts ──────────────────────────────────────────────────────────────
+
+export const createGroupGiftSchema = z.object({
+  recipientName: z
+    .string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name cannot exceed 100 characters"),
+  recipientPhone: e164Phone,
+  targetAmountNgn: z.number().min(500, "Minimum target is ₦500"),
+  deadline: z
+    .string()
+    .datetime({ message: "deadline must be a valid ISO 8601 datetime" })
+    .refine((val) => new Date(val) > new Date(), "Deadline must be in the future"),
+  unlockAt: z
+    .string()
+    .datetime({ message: "unlockAt must be a valid ISO 8601 datetime" })
+    .refine((val) => new Date(val) > new Date(), "Unlock date must be in the future"),
+  message: z.string().max(280, "Message cannot exceed 280 characters").optional(),
+});
+
+export type CreateGroupGiftInput = z.infer<typeof createGroupGiftSchema>;
+
+export const contributeSchema = z.object({
+  contributorName: z
+    .string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name cannot exceed 100 characters"),
+  contributorPhone: e164Phone.optional().or(z.literal("").transform(() => undefined)),
+  amountNgn: z.number().min(100, "Minimum contribution is ₦100"),
+});
+
+export type ContributeInput = z.infer<typeof contributeSchema>;

@@ -11,8 +11,8 @@ const reviewSchema = z.object({
 });
 
 export const PATCH = withErrorHandler(
-  withAdmin(async (req: NextRequest, context: unknown) => {
-    const { id } = (context as { params: { id: string } }).params;
+  withAdmin(async (req: NextRequest, context: any) => {
+    const { id } = await context.params;
     const body = await req.json();
     const parsed = reviewSchema.safeParse(body);
 

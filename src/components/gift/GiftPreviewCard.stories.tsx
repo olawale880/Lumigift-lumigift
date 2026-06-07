@@ -25,7 +25,7 @@ export const Complete: Story = {
       unlockAt: "2026-12-25T10:00:00Z",
       message: "Merry Christmas! 🎄",
     },
-    template: { emoji: "🎄", occasion: "Christmas", id: "christmas", message: "" },
+    template: { emoji: "🎄", occasion: "Christmas", id: "christmas", suggestedMessage: "" },
     onEdit: () => {},
   },
 };

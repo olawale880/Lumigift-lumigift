@@ -35,6 +35,7 @@ function makeGift(overrides: Partial<Gift> = {}): Gift {
     amountNgn: 5000,
     amountUsdc: "3.0",
     status: "locked",
+    occasion: "general",
     unlockAt: new Date("2026-12-25"),
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),

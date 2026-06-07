@@ -122,6 +122,7 @@ describe("Accessibility audits (axe-core)", () => {
       amountUsdc: "3.0000000",
       unlockAt: new Date(Date.now() - 1000),
       status: "unlocked" as const,
+      occasion: "general" as const,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

@@ -8,9 +8,9 @@ import { giftIdParamSchema } from "@/lib/schemas";
 import type { ApiResponse, Gift } from "@/types";
 
 export const GET = withErrorHandler(
-  async (_req: NextRequest, context: unknown) => {
+  async (_req: NextRequest, context: any) => {
     // ── Validate path param ────────────────────────────────────────────────
-    const { params } = context as { params: { id: string } };
+    const params = await context.params;
     const paramValidation = validateRequest(giftIdParamSchema, params);
     if (!paramValidation.success) return paramValidation.errorResponse;
 
@@ -42,7 +42,7 @@ export const GET = withErrorHandler(
 );
 
 export const DELETE = withErrorHandler(
-  withCsrf(async (_req: NextRequest, context: unknown) => {
+  withCsrf(async (_req: NextRequest, context: any) => {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json<ApiResponse<never>>(
@@ -52,7 +52,7 @@ export const DELETE = withErrorHandler(
     }
 
     // ── Validate path param ──────────────────────────────────────────────
-    const { params } = context as { params: { id: string } };
+    const params = await context.params;
     const paramValidation = validateRequest(giftIdParamSchema, params);
     if (!paramValidation.success) return paramValidation.errorResponse;
 

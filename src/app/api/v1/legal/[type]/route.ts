@@ -5,15 +5,16 @@ import type { ApiResponse } from "@/types";
 
 async function handler(
   req: NextRequest,
-  { params }: { params: { type: string } }
+  { params }: { params: Promise<{ type: string }> }
 ): Promise<NextResponse> {
-  const type = params.type as "tos" | "privacy";
+  const { type } = await params;
+  const docType = type as "tos" | "privacy";
 
-  if (!["tos", "privacy"].includes(type)) {
+  if (!["tos", "privacy"].includes(docType)) {
     return NextResponse.json({ success: false, error: "Invalid document type" }, { status: 400 });
   }
 
-  const doc = await getLatestLegalDocument(type);
+  const doc = await getLatestLegalDocument(docType);
 
   if (!doc) {
     return NextResponse.json({ success: false, error: "Document not found" }, { status: 404 });

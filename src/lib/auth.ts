@@ -11,6 +11,7 @@ import { normalizePhone } from "@/lib/phone";
 import { verifyOtp } from "@/lib/otp";
 import { serviceLogger } from "@/lib/logger";
 import { jwtRotationOptions } from "@/lib/jwt-rotation";
+import { createRefreshToken, rotateRefreshToken, revokeAllUserTokens } from "@/server/services/token.service";
 
 const log = serviceLogger("auth");
 

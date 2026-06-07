@@ -3,8 +3,8 @@ import { getGroupGiftById } from "@/server/services/group-gift.service";
 import { withErrorHandler } from "@/server/middleware";
 import type { ApiResponse, GroupGift } from "@/types";
 
-export const GET = withErrorHandler(async (_req: NextRequest, context: unknown) => {
-  const { id } = (context as { params: { id: string } }).params;
+export const GET = withErrorHandler(async (_req: NextRequest, context: any) => {
+  const { id } = await context.params;
   const gift = await getGroupGiftById(id);
   if (!gift) {
     return NextResponse.json<ApiResponse<never>>(

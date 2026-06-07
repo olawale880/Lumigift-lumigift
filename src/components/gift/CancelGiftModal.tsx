@@ -44,7 +44,7 @@ export function CancelGiftModal({ giftId, onClose, onSuccess }: CancelGiftModalP
       setIsDeleting(false);
     }
   };
-...
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
