@@ -75,7 +75,7 @@
     "posthog-js": "1.378.1",
     "react": "^19.2.7",
     "react-hook-form": "^7.77.0",
-    "redis": "^5.12.1",
+    "redis": "^6.0.0",
     "resend": "^6.12.4",
     "stripe": "^22.2.0",
     "zod": "^4.4.3"
