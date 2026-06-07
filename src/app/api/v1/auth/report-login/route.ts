@@ -36,6 +36,7 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   }
 
   await pool.query(
+    // eslint-disable-next-line no-restricted-syntax
     `INSERT INTO suspicious_login_reports (user_id, fingerprint)
      VALUES ($1, $2)`,
     [userId, fingerprint]

@@ -18,7 +18,7 @@ jest.mock("@/server/services/gift.service", () => ({
 import { NextRequest } from "next/server";
 
 // POST is loaded lazily inside beforeAll so env vars are set first
-let POST: (req: NextRequest) => Promise<Response>;
+let POST: (_req: NextRequest) => Promise<Response>;
 
 beforeAll(async () => {
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_test_secret";

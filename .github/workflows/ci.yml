@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main, develop]
   schedule:
-    - cron: '0 6 * * 1'  # Weekly on Monday at 06:00 UTC
+    - cron: "0 6 * * 1" # Weekly on Monday at 06:00 UTC
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0  # full history so gitleaks can scan all commits in the PR
+          fetch-depth: 0 # full history so gitleaks can scan all commits in the PR
 
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:

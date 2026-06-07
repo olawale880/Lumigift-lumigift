@@ -23,9 +23,8 @@ export default async function HomePage() {
             <span className={styles.highlight}>on a surprise date</span>
           </h1>
           <p className={styles.subheadline}>
-            Send money that stays completely hidden until the perfect moment.
-            Birthdays, anniversaries, Valentine&apos;s Day — make every gift
-            unforgettable.
+            Send money that stays completely hidden until the perfect moment. Birthdays,
+            anniversaries, Valentine&apos;s Day — make every gift unforgettable.
           </p>
           <div className={styles.cta}>
             <HeroCTA />

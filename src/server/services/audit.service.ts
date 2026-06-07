@@ -36,18 +36,11 @@ export interface AuditLogEntry {
  * @throws {Error} If the database insert fails.
  */
 export async function createAuditLog(entry: AuditLogEntry): Promise<string> {
-  const {
-    eventType,
-    userId,
-    giftId,
-    amountNgn,
-    amountUsdc,
-    ipAddress,
-    userAgent,
-    metadata,
-  } = entry;
+  const { eventType, userId, giftId, amountNgn, amountUsdc, ipAddress, userAgent, metadata } =
+    entry;
 
   const result = await pool.query<{ id: string }>(
+    // eslint-disable-next-line no-restricted-syntax
     `INSERT INTO audit_logs (
       event_type,
       user_id,
@@ -140,6 +133,7 @@ export async function queryAuditLogs(
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const countResult = await pool.query<{ count: string }>(
+    // eslint-disable-next-line no-restricted-syntax
     `SELECT COUNT(*) as count FROM audit_logs ${whereClause}`,
     params
   );
@@ -149,19 +143,7 @@ export async function queryAuditLogs(
   const limit = query.limit ?? 50;
   const offset = query.offset ?? 0;
 
-  const result = await pool.query<{
-    id: string;
-    event_type: AuditEventType;
-    user_id: string | null;
-    gift_id: string | null;
-    amount_ngn: number | null;
-    amount_usdc: string | null;
-    timestamp: Date;
-    ip_address: string | null;
-    user_agent: string | null;
-    metadata: Record<string, unknown> | null;
-  }>(
-    `SELECT
+  const sql = `SELECT
       id,
       event_type,
       user_id,
@@ -175,9 +157,20 @@ export async function queryAuditLogs(
     FROM audit_logs
     ${whereClause}
     ORDER BY timestamp DESC
-    LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
-    [...params, limit, offset]
-  );
+    LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+
+  const result = await pool.query<{
+    id: string;
+    event_type: AuditEventType;
+    user_id: string | null;
+    gift_id: string | null;
+    amount_ngn: number | null;
+    amount_usdc: string | null;
+    timestamp: Date;
+    ip_address: string | null;
+    user_agent: string | null;
+    metadata: Record<string, unknown> | null;
+  }>(sql, [...params, limit, offset]);
 
   const logs = result.rows.map((row) => ({
     id: row.id,

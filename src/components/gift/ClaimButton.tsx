@@ -10,7 +10,7 @@ import styles from "./ClaimButton.module.css";
 interface ClaimButtonProps {
   giftId: string;
   recipientStellarKey: string;
-  onStatusChange: (status: GiftStatus) => void;
+  onStatusChange: (_status: GiftStatus) => void;
 }
 
 export function ClaimButton({ giftId, recipientStellarKey, onStatusChange }: ClaimButtonProps) {
