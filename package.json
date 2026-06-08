@@ -107,7 +107,7 @@
     "license-checker": "25.0.1",
     "lint-staged": "^17.0.7",
     "prettier": "^3.8.3",
-    "react-dom": "^19.2.6",
+    "react-dom": "^19.2.7",
     "storybook": "^8.6.12",
     "ts-node": "^10.9.2",
     "typedoc": "^0.28.19",
