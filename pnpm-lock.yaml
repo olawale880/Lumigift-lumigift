@@ -11,11 +11,14 @@ importers:
       '@aws-sdk/client-secrets-manager':
         specifier: ^3.530.0
         version: 3.1056.0
+      '@growthbook/growthbook-react':
+        specifier: ^1.6.5
+        version: 1.6.5(react@19.2.7)
       '@hookform/resolvers':
         specifier: ^5.4.0
-        version: 5.4.0(react-hook-form@7.77.0(react@19.2.7))
+        version: 5.4.0(react-hook-form@7.78.0(react@19.2.7))
       '@react-pdf/renderer':
-        specifier: 4.3.0
+        specifier: ^4.3.0
         version: 4.3.0(react@19.2.7)
       '@sentry/nextjs':
         specifier: 10.54.0
@@ -69,8 +72,8 @@ importers:
         specifier: ^19.2.7
         version: 19.2.7
       react-hook-form:
-        specifier: ^7.77.0
-        version: 7.77.0(react@19.2.7)
+        specifier: ^7.78.0
+        version: 7.78.0(react@19.2.7)
       redis:
         specifier: ^6.0.0
         version: 6.0.0(@opentelemetry/api@1.9.1)
@@ -97,7 +100,7 @@ importers:
         specifier: ^8.6.12
         version: 8.6.18(esbuild@0.25.12)(next@16.2.7(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.7))(react@19.2.7))(react-dom@19.2.6(react@19.2.7))(react@19.2.7)(storybook@8.6.18(prettier@3.8.3))(type-fest@2.19.0)(typescript@6.0.3)(webpack-hot-middleware@2.26.1)(webpack@5.107.2(esbuild@0.25.12)(postcss@8.5.15))
       '@storybook/react':
-        specifier: ^8.6.12
+        specifier: ^8.6.18
         version: 8.6.18(@storybook/test@8.6.18(storybook@8.6.18(prettier@3.8.3)))(react-dom@19.2.6(react@19.2.7))(react@19.2.7)(storybook@8.6.18(prettier@3.8.3))(typescript@6.0.3)
       '@testing-library/dom':
         specifier: ^10.4.0
@@ -1139,6 +1142,16 @@ packages:
 
   '@gerrit0/mini-shiki@3.23.0':
     resolution: {integrity: sha512-bEMORlG0cqdjVyCEuU0cDQbORWX+kYCeo0kV1lbxF5bt4r7SID2l9bqsxJEM0zndaxpOUT7riCyIVEuqq/Ynxg==}
+
+  '@growthbook/growthbook-react@1.6.5':
+    resolution: {integrity: sha512-afi/RUbwazVNKv2acn6wDQz4BJNRAEpwIuHfggQup2/aE5PLAxy3+95gjjRMgCcPR0Pf3sFmhYGvOmxLD0ZRbQ==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: ^16.8.0-0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
+
+  '@growthbook/growthbook@1.6.5':
+    resolution: {integrity: sha512-mUaMsgeUTpRIUOTn33EUXHRK6j7pxBjwqH4WpQyq+pukjd1AIzWlEa6w7i6bInJUcweGgP2beXZmaP6b6UPn7A==}
+    engines: {node: '>=10'}
 
   '@hookform/resolvers@5.4.0':
     resolution: {integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==}
@@ -3747,6 +3760,10 @@ packages:
   dom-converter@0.2.0:
     resolution: {integrity: sha512-gd3ypIPfOMr9h5jIKq8E3sHOTCjeirnl0WK5ZdS1AW0Odt0b1PaWaHdJ4Qk4klv+YB9aJBS7mESXjFoDQPu6DA==}
 
+  dom-mutator@0.6.0:
+    resolution: {integrity: sha512-iCt9o0aYfXMUkz/43ZOAUFQYotjGB+GNbYJiJdz4TgXkyToXbbRy5S6FbTp72lRBtfpUMwEc1KmpFEU4CZeoNg==}
+    engines: {node: '>=10'}
+
   dom-serializer@1.4.1:
     resolution: {integrity: sha512-VHwB3KfrcOOkelEG2ZOfxqLZdfkil8PtJi4P8N2MMXucZq2yLp75ClViUlOVwyoHEDjYU433Aq+5zWP61+RGag==}
 
@@ -5794,8 +5811,8 @@ packages:
     peerDependencies:
       react: ^19.2.6
 
-  react-hook-form@7.77.0:
-    resolution: {integrity: sha512-Sslh9YDYc0GDlWT/lxasnIduNo4v3yyvqRGvmGKUre5AFjDs/HV9/OafHGD8d+sB2yoL4UIL9L8X9i0WlZZebg==}
+  react-hook-form@7.78.0:
+    resolution: {integrity: sha512-EEZqc+N23moyzTlz61Pj+JvcXo76ICkpfOZo8JZw+sM4+wLQGh6nI2Ms+PdMOYNluFu0ghlM7B8mCzhRYtJCnA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19
@@ -8099,10 +8116,19 @@ snapshots:
       '@shikijs/types': 3.23.0
       '@shikijs/vscode-textmate': 10.0.2
 
-  '@hookform/resolvers@5.4.0(react-hook-form@7.77.0(react@19.2.7))':
+  '@growthbook/growthbook-react@1.6.5(react@19.2.7)':
+    dependencies:
+      '@growthbook/growthbook': 1.6.5
+      react: 19.2.7
+
+  '@growthbook/growthbook@1.6.5':
+    dependencies:
+      dom-mutator: 0.6.0
+
+  '@hookform/resolvers@5.4.0(react-hook-form@7.78.0(react@19.2.7))':
     dependencies:
       '@standard-schema/utils': 0.3.0
-      react-hook-form: 7.77.0(react@19.2.7)
+      react-hook-form: 7.78.0(react@19.2.7)
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -11002,6 +11028,8 @@ snapshots:
     dependencies:
       utila: 0.4.0
 
+  dom-mutator@0.6.0: {}
+
   dom-serializer@1.4.1:
     dependencies:
       domelementtype: 2.3.0
@@ -13542,7 +13570,7 @@ snapshots:
       react: 19.2.7
       scheduler: 0.27.0
 
-  react-hook-form@7.77.0(react@19.2.7):
+  react-hook-form@7.78.0(react@19.2.7):
     dependencies:
       react: 19.2.7
 
