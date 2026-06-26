@@ -1,4 +1,5 @@
 import { getRedisClient } from "@/lib/redis";
+import { logger } from "@/lib/logger";
 
 const OTP_TTL = 600; // 10 minutes
 const MAX_ATTEMPTS = 5;       // per OTP token
@@ -89,6 +90,10 @@ export async function verifyOtp(
       if (sessionFailures >= MAX_SESSION_FAILURES) {
         await redis.del(`otp:session-failures:${phone}`);
         await redis.set(`otp:lock:${phone}`, "1", { EX: ACCOUNT_LOCK_TTL });
+        logger.warn(
+          { event: "otp_account_locked", phone, lockTtlSeconds: ACCOUNT_LOCK_TTL },
+          "OTP brute-force lockout: account locked after repeated session failures"
+        );
         return {
           success: false,
           locked: true,
