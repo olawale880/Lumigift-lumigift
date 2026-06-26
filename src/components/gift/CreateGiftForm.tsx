@@ -55,10 +55,13 @@ export function CreateGiftForm() {
   const messageValue = watch("message") ?? "";
   const messageLength = messageValue.length;
 
-  const fetchRate = useCallback(async () => {
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchRate = useCallback(async (signal?: AbortSignal) => {
     try {
       setFetchingRate(true);
-      const res = await fetch("/api/v1/exchange-rate");
+      const res = await fetch("/api/v1/exchange-rate", { signal });
       if (!res.ok) throw new Error("Failed to fetch rate");
       const json = await res.json();
       setRateData({
@@ -67,19 +70,68 @@ export function CreateGiftForm() {
       });
       setRateError(null);
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
       console.error("[CreateGiftForm] rate fetch error:", err);
       setRateError("Unable to fetch live exchange rate");
     } finally {
-      setFetchingRate(false);
+      if (!debounceTimeoutRef.current) {
+        setFetchingRate(false);
+      }
     }
   }, []);
 
   // Fetch rate on mount and every 60s
   useEffect(() => {
     fetchRate();
-    const interval = setInterval(fetchRate, 60000);
+    const interval = setInterval(() => {
+      if (!debounceTimeoutRef.current) {
+        fetchRate();
+      }
+    }, 60000);
     return () => clearInterval(interval);
   }, [fetchRate]);
+
+  // Debounced fetch when amountNgn changes
+  useEffect(() => {
+    if (!amountNgn || amountNgn <= 0) {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+        debounceTimeoutRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setFetchingRate(false);
+      return;
+    }
+
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setFetchingRate(true);
+
+    debounceTimeoutRef.current = setTimeout(async () => {
+      debounceTimeoutRef.current = null;
+      await fetchRate(controller.signal);
+    }, 400);
+
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+      controller.abort();
+    };
+  }, [amountNgn, fetchRate]);
 
   // Update USDC equivalent when amount or rate changes
   useEffect(() => {
