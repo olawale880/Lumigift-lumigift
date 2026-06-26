@@ -2,12 +2,20 @@ import pool from "@/lib/db";
 
 export type AuditEventType =
   | "gift_created"
-  | "payment_received"
-  | "gift_funded"
-  | "gift_claimed"
   | "gift_cancelled"
+  | "gift_claimed"
+  | "gift_unlocked"
+  | "gift_expired"
+  | "gift_deleted"
+  | "gift_funded"
+  | "gift_refunded"
+  | "payment_received"
   | "payment_failed"
-  | "gift_refunded";
+  | "payment_refunded"
+  | "user_registered"
+  | "otp_sent"
+  | "otp_verified"
+  | "suspicious_login_reported";
 
 export interface AuditLogEntry {
   eventType: AuditEventType;
@@ -73,8 +81,8 @@ export interface AuditLogQuery {
   eventType?: AuditEventType;
   startDate?: Date;
   endDate?: Date;
+  page?: number;
   limit?: number;
-  offset?: number;
 }
 
 export interface AuditLogResult {
@@ -100,7 +108,7 @@ export interface AuditLogResult {
  */
 export async function queryAuditLogs(
   query: AuditLogQuery
-): Promise<{ logs: AuditLogResult[]; total: number }> {
+): Promise<{ logs: AuditLogResult[]; total: number; page: number; pages: number }> {
   const conditions: string[] = [];
   const params: unknown[] = [];
   let paramIndex = 1;
@@ -139,9 +147,10 @@ export async function queryAuditLogs(
   );
 
   const total = parseInt(countResult.rows[0].count, 10);
-
+  const page = query.page ?? 1;
   const limit = query.limit ?? 50;
-  const offset = query.offset ?? 0;
+  const offset = (page - 1) * limit;
+  const pages = Math.ceil(total / limit) || 1;
 
   const sql = `SELECT
       id,
@@ -185,7 +194,7 @@ export async function queryAuditLogs(
     metadata: row.metadata,
   }));
 
-  return { logs, total };
+  return { logs, total, page, pages };
 }
 
 /**
