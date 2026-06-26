@@ -95,7 +95,7 @@ importers:
         version: 8.6.18(storybook@8.6.18(prettier@3.8.3))
       '@storybook/addon-essentials':
         specifier: ^8.6.12
-        version: 8.6.14(@types/react@19.2.16)(storybook@8.6.18(prettier@3.8.3))
+        version: 8.6.14(@types/react@19.2.17)(storybook@8.6.18(prettier@3.8.3))
       '@storybook/nextjs':
         specifier: ^8.6.12
         version: 8.6.18(esbuild@0.25.12)(next@16.2.7(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(storybook@8.6.18(prettier@3.8.3))(type-fest@2.19.0)(typescript@6.0.3)(webpack-hot-middleware@2.26.1)(webpack@5.107.2(esbuild@0.25.12)(postcss@8.5.15))
@@ -124,11 +124,11 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
       '@types/react':
-        specifier: ^19.2.16
-        version: 19.2.16
+        specifier: ^19.2.17
+        version: 19.2.17
       '@types/react-dom':
         specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.16)
+        version: 19.2.3(@types/react@19.2.17)
       chromatic:
         specifier: ^17.2.0
         version: 17.2.0
@@ -2645,8 +2645,8 @@ packages:
     peerDependencies:
       '@types/react': ^19.2.0
 
-  '@types/react@19.2.16':
-    resolution: {integrity: sha512-esJiCAnl0kfpNdE69f3So4WJUXy95dLZydX0KwK46riIHDzHM7O9Vtf9xCHW0PXIqvgqNrswl522kA/5yx+F4w==}
+  '@types/react@19.2.17':
+    resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
 
   '@types/resolve@1.20.6':
     resolution: {integrity: sha512-A4STmOXPhMUtHH+S6ymgE2GiBSMqf4oTvcQZMcHzokuTLVYzXTB8ttjcgxOVaAp2lGwEdzZ0J+cRbbeevQj1UQ==}
@@ -8554,10 +8554,10 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@mdx-js/react@3.1.1(@types/react@19.2.16)(react@19.2.7)':
+  '@mdx-js/react@3.1.1(@types/react@19.2.17)(react@19.2.7)':
     dependencies:
       '@types/mdx': 2.0.13
-      '@types/react': 19.2.16
+      '@types/react': 19.2.17
       react: 19.2.7
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
@@ -9326,7 +9326,7 @@ snapshots:
       storybook: 8.6.18(prettier@3.8.3)
       ts-dedent: 2.2.0
 
-  '@storybook/addon-docs@8.6.14(@types/react@19.2.16)(storybook@8.6.18(prettier@3.8.3))':
+  '@storybook/addon-docs@8.6.14(@types/react@19.2.17)(storybook@8.6.18(prettier@3.8.3))':
     dependencies:
       '@mdx-js/react': 3.1.1(@types/react@19.2.16)(react@19.2.7)
       '@storybook/blocks': 8.6.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(storybook@8.6.18(prettier@3.8.3))
@@ -9339,12 +9339,12 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
-  '@storybook/addon-essentials@8.6.14(@types/react@19.2.16)(storybook@8.6.18(prettier@3.8.3))':
+  '@storybook/addon-essentials@8.6.14(@types/react@19.2.17)(storybook@8.6.18(prettier@3.8.3))':
     dependencies:
       '@storybook/addon-actions': 8.6.14(storybook@8.6.18(prettier@3.8.3))
       '@storybook/addon-backgrounds': 8.6.14(storybook@8.6.18(prettier@3.8.3))
       '@storybook/addon-controls': 8.6.14(storybook@8.6.18(prettier@3.8.3))
-      '@storybook/addon-docs': 8.6.14(@types/react@19.2.16)(storybook@8.6.18(prettier@3.8.3))
+      '@storybook/addon-docs': 8.6.14(@types/react@19.2.17)(storybook@8.6.18(prettier@3.8.3))
       '@storybook/addon-highlight': 8.6.14(storybook@8.6.18(prettier@3.8.3))
       '@storybook/addon-measure': 8.6.14(storybook@8.6.18(prettier@3.8.3))
       '@storybook/addon-outline': 8.6.14(storybook@8.6.18(prettier@3.8.3))
@@ -9723,8 +9723,8 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
     optionalDependencies:
-      '@types/react': 19.2.16
-      '@types/react-dom': 19.2.3(@types/react@19.2.16)
+      '@types/react': 19.2.17
+      '@types/react-dom': 19.2.3(@types/react@19.2.17)
 
   '@testing-library/user-event@14.5.2(@testing-library/dom@10.4.0)':
     dependencies:
@@ -9824,11 +9824,11 @@ snapshots:
       pg-protocol: 1.14.0
       pg-types: 2.2.0
 
-  '@types/react-dom@19.2.3(@types/react@19.2.16)':
+  '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:
-      '@types/react': 19.2.16
+      '@types/react': 19.2.17
 
-  '@types/react@19.2.16':
+  '@types/react@19.2.17':
     dependencies:
       csstype: 3.2.3
 
