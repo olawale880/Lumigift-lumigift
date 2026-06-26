@@ -229,14 +229,21 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
 ### Staging
 
 ```bash
-CORS_ALLOWED_ORIGINS=https://staging.yourdomain.com
+CORS_ALLOWED_ORIGINS=https://staging.lumigift.com
 ```
 
 ### Production
 
+Production must be restricted to **only** the two canonical Lumigift domains:
+
 ```bash
-CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+CORS_ALLOWED_ORIGINS=https://lumigift.com,https://www.lumigift.com
 ```
+
+> **Important:** Wildcard entries (e.g. `*`) and development origins (e.g. `localhost`)
+> must **never** appear in `CORS_ALLOWED_ORIGINS` in a production deployment.
+> The environment variable is read at server start via `src/server/config/env.ts`
+> — no origin is hardcoded in `src/server/middleware/cors.ts`.
 
 ## Related Documentation
 
