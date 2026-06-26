@@ -26,7 +26,7 @@ export function CreateGiftForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usdcEquivalent, setUsdcEquivalent] = useState("…");
-  const [rateData, setRateData] = useState<{ ngnPerUsdc: number; lastUpdated: number } | null>(null);
+  const [rateData, setRateData] = useState<{ rate: number; lastUpdated: number; stale: boolean } | null>(null);
   const [fetchingRate, setFetchingRate] = useState(false);
   const [rateError, setRateError] = useState<string | null>(null);
   const [showUnregisteredWarning, setShowUnregisteredWarning] = useState(false);
@@ -65,8 +65,9 @@ export function CreateGiftForm() {
       if (!res.ok) throw new Error("Failed to fetch rate");
       const json = await res.json();
       setRateData({
-        ngnPerUsdc: json.data.ngnPerUsdc,
-        lastUpdated: json.data.timestamp,
+        rate: json.data.rate,
+        lastUpdated: json.data.cachedAt ?? json.data.timestamp,
+        stale: json.data.stale ?? false,
       });
       setRateError(null);
     } catch (err) {
@@ -135,8 +136,8 @@ export function CreateGiftForm() {
 
   // Update USDC equivalent when amount or rate changes
   useEffect(() => {
-    if (amountNgn && rateData?.ngnPerUsdc) {
-      const usdc = amountNgn / rateData.ngnPerUsdc;
+    if (amountNgn && rateData?.rate) {
+      const usdc = amountNgn / rateData.rate;
       setUsdcEquivalent(usdc.toFixed(2));
     } else {
       setUsdcEquivalent("…");
@@ -295,7 +296,8 @@ export function CreateGiftForm() {
           )}
           {rateData && (
             <div className={styles.conversionRate}>
-              Rate: {formatNGN(rateData.ngnPerUsdc)}/USDC · Last updated {new Date(rateData.lastUpdated).toLocaleTimeString()}
+              Rate: {formatNGN(rateData.rate)}/USDC · Last updated {new Date(rateData.lastUpdated).toLocaleTimeString()}
+              {rateData.stale && <span className={styles.stale}> · Rate may be outdated</span>}
             </div>
           )}
           {rateError && <div className={styles.error}>{rateError}</div>}

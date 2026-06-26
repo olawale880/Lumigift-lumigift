@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getGiftById, cancelGift, softDeleteGift } from "@/server/services/gift.service";
+import { createAuditLog } from "@/server/services/audit.service";
 import { refundPayment } from "@/lib/paystack";
 import { withErrorHandler, withCsrf, validateRequest } from "@/server/middleware";
 import { giftIdParamSchema } from "@/lib/schemas";
@@ -94,6 +95,19 @@ export const DELETE = withErrorHandler(
     const cancelled = await cancelGift(gift.id);
     // Soft-delete: preserve record for audit trail
     await softDeleteGift(gift.id);
+    
+    await createAuditLog({
+      eventType: "gift_deleted",
+      userId,
+      giftId: gift.id,
+      amountNgn: gift.amountNgn,
+      amountUsdc: gift.amountUsdc,
+      metadata: {
+        status: gift.status,
+        recipientName: gift.recipientName,
+        unlockAt: gift.unlockAt,
+      },
+    });
 
     return NextResponse.json<ApiResponse<Gift>>({
       success: true,

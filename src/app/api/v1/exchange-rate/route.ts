@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { getExchangeRate } from "@/server/services/exchange-rate.service";
+import { serviceLogger } from "@/lib/logger";
+
+const logger = serviceLogger("api/exchange-rate");
 
 /**
  * GET /api/v1/exchange-rate
@@ -13,13 +16,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const amountNgn = parseFloat(searchParams.get("ngn") ?? "0");
 
-    const { ngnPerUsdc, stale, source } = await getExchangeRate();
+    const { ngnPerUsdc, stale, source, cachedAt } = await getExchangeRate();
 
     const response: any = {
       success: true,
       data: {
-        ngnPerUsdc,
+        rate: ngnPerUsdc,
         stale,
+        cachedAt,
         source,
         timestamp: Date.now(),
       },
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[api/exchange-rate] error:", error);
+    logger.error("Error fetching exchange rate", { error });
     return NextResponse.json(
       { success: false, error: "Failed to fetch exchange rate" },
       { status: 500 }

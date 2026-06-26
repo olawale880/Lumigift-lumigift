@@ -5,6 +5,7 @@ import { updateGiftStatus } from "@/server/services/gift.service";
 import { getRedisClient } from "@/lib/redis";
 import { serverConfig } from "@/server/config";
 import type { ApiResponse } from "@/types";
+import pool from "@/lib/db";
 
 const IDEMPOTENCY_TTL_SECONDS = 86400; // 24 hours
 
@@ -44,12 +45,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const redis = await getRedisClient();
-  const idempotencyKey = `stripe:event:${event.id}`;
-
-  // Return 200 immediately for already-processed events
-  const alreadyProcessed = await redis.get(idempotencyKey);
-  if (alreadyProcessed) {
+  // First check database for idempotency
+  const dbResult = await pool.query(
+    "SELECT event_id FROM processed_stripe_events WHERE event_id = $1",
+    [event.id]
+  );
+  
+  if (dbResult.rows.length > 0) {
     return NextResponse.json({ success: true, data: { received: true } });
   }
 
@@ -77,7 +79,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Mark event as processed
+    // Store event in database
+    await pool.query(
+      "INSERT INTO processed_stripe_events (event_id) VALUES ($1)",
+      [event.id]
+    );
+
+    // Also cache in Redis for quick lookups
+    const redis = await getRedisClient();
+    const idempotencyKey = `stripe:event:${event.id}`;
     await redis.set(idempotencyKey, "1", { EX: IDEMPOTENCY_TTL_SECONDS });
 
     return NextResponse.json<ApiResponse<{ received: boolean }>>({

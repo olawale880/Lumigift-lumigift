@@ -70,6 +70,11 @@
   opacity: 0.8;
 }
 
+.stale {
+  color: var(--color-warning);
+  font-weight: var(--font-medium);
+}
+
 .refreshing {
   display: inline-block;
   margin-left: var(--space-1);
