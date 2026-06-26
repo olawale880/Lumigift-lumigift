@@ -2,6 +2,17 @@
   "extends": ["next/core-web-vitals", "prettier"],
   "rules": {
     "no-console": ["warn", { "allow": ["warn", "error"] }],
-    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "TaggedTemplateExpression[tag.name='sql'] TemplateLiteral[expressions.length>0]",
+        "message": "SQL injection risk: do not use template literal expressions in sql-tagged strings. Use parameterized query placeholders ($1, $2, ...) and pass values as a separate array instead."
+      },
+      {
+        "selector": "TaggedTemplateExpression[tag.property.name='query'] TemplateLiteral[expressions.length>0]",
+        "message": "SQL injection risk: do not interpolate values into db.query template strings. Use parameterized placeholders."
+      }
+    ]
   }
 }
