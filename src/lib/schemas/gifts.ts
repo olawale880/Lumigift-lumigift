@@ -113,6 +113,10 @@ export const claimGiftSchema = z.object({
     .string()
     .length(56, "Stellar public key must be exactly 56 characters")
     .regex(/^G[A-Z2-7]{55}$/, "Invalid Stellar public key format"),
+  /** Challenge nonce obtained from GET /api/v1/gifts/[id]/challenge */
+  nonce: z.string().min(1, "nonce is required"),
+  /** Hex-encoded Ed25519 signature of the nonce bytes */
+  signature: z.string().min(1, "signature is required"),
 });
 
 export type ClaimGiftInput = z.infer<typeof claimGiftSchema>;
