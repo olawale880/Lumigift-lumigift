@@ -66,6 +66,23 @@ export interface EscrowClientOptions {
   sourcePublicKey: string;
 }
 
+// ─── Replay-protection constant ───────────────────────────────────────────────
+
+/**
+ * Transaction validity window in seconds.
+ * `.setTimeout(VALIDITY_WINDOW_SEC)` sets `timeBounds.maxTime = now + 30`,
+ * which prevents a signed transaction from being replayed after it expires.
+ */
+const VALIDITY_WINDOW_SEC = 30;
+
+/** Substring patterns that identify a stale-sequence simulation error. */
+const SEQ_ERROR_PATTERNS = ["bad seq", "sequence", "txbadseq"];
+
+function isSeqError(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return SEQ_ERROR_PATTERNS.some((p) => lower.includes(p));
+}
+
 // ─── Client ───────────────────────────────────────────────────────────────────
 
 export class EscrowClient {
@@ -77,6 +94,38 @@ export class EscrowClient {
     this.opts = opts;
     this.rpc = new SorobanRpc.Server(opts.rpcUrl, { allowHttp: false });
     this.contract = new Contract(opts.contractId);
+  }
+
+  /** Always fetches a fresh account (sequence number) from the network. */
+  private getAccount() {
+    return this.rpc.getAccount(this.opts.sourcePublicKey);
+  }
+
+  /**
+   * Simulates `tx` against the RPC.  If the simulation fails with a
+   * sequence-number error, fetches a fresh account, rebuilds the transaction
+   * via `rebuild(account)`, and retries once.
+   *
+   * Returns the assembled, ready-to-sign XDR string.
+   */
+  private async simulateWithRetry(
+    tx: ReturnType<TransactionBuilder["build"]>,
+    rebuild: (account: Awaited<ReturnType<typeof this.getAccount>>) => ReturnType<TransactionBuilder["build"]>
+  ): Promise<string> {
+    let simResult = await this.rpc.simulateTransaction(tx);
+
+    if (SorobanRpc.Api.isSimulationError(simResult) && isSeqError(simResult.error)) {
+      // Sequence is stale — refresh and rebuild once
+      const freshAccount = await this.getAccount();
+      tx = rebuild(freshAccount);
+      simResult = await this.rpc.simulateTransaction(tx);
+    }
+
+    if (SorobanRpc.Api.isSimulationError(simResult)) {
+      throw parseContractError(simResult.error);
+    }
+
+    return SorobanRpc.assembleTransaction(tx, simResult).build().toXDR();
   }
 
   // ── initialize ──────────────────────────────────────────────────────────────
@@ -101,33 +150,30 @@ export class EscrowClient {
     amount: bigint,
     unlockTime: bigint
   ): Promise<string> {
-    const account = await this.rpc.getAccount(this.opts.sourcePublicKey);
-
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: this.opts.networkPassphrase,
-    })
-      .addOperation(
-        this.contract.call(
-          "initialize",
-          new Address(admin).toScVal(),
-          nativeToScVal(giftId, { type: "symbol" }),
-          new Address(sender).toScVal(),
-          new Address(recipient).toScVal(),
-          new Address(token).toScVal(),
-          nativeToScVal(amount, { type: "i128" }),
-          nativeToScVal(unlockTime, { type: "u64" })
+    const buildTx = (account: Awaited<ReturnType<typeof this.getAccount>>) =>
+      new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.opts.networkPassphrase,
+      })
+        .addOperation(
+          this.contract.call(
+            "initialize",
+            new Address(admin).toScVal(),
+            nativeToScVal(giftId, { type: "symbol" }),
+            new Address(sender).toScVal(),
+            new Address(recipient).toScVal(),
+            new Address(token).toScVal(),
+            nativeToScVal(amount, { type: "i128" }),
+            nativeToScVal(unlockTime, { type: "u64" })
+          )
         )
-      )
-      .setTimeout(30)
-      .build();
+        // setTimeout sets timeBounds.maxTime = now + VALIDITY_WINDOW_SEC,
+        // preventing replay of expired transactions.
+        .setTimeout(VALIDITY_WINDOW_SEC)
+        .build();
 
-    const simResult = await this.rpc.simulateTransaction(tx);
-    if (SorobanRpc.Api.isSimulationError(simResult)) {
-      throw parseContractError(simResult.error);
-    }
-
-    return SorobanRpc.assembleTransaction(tx, simResult).build().toXDR();
+    const account = await this.getAccount();
+    return this.simulateWithRetry(buildTx(account), buildTx);
   }
 
   // ── set_admin ────────────────────────────────────────────────────────────────
@@ -138,24 +184,17 @@ export class EscrowClient {
    * @param newAdmin - Stellar public key of the new admin (G…)
    */
   async buildSetAdmin(newAdmin: string): Promise<string> {
-    const account = await this.rpc.getAccount(this.opts.sourcePublicKey);
+    const buildTx = (account: Awaited<ReturnType<typeof this.getAccount>>) =>
+      new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.opts.networkPassphrase,
+      })
+        .addOperation(this.contract.call("set_admin", new Address(newAdmin).toScVal()))
+        .setTimeout(VALIDITY_WINDOW_SEC)
+        .build();
 
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: this.opts.networkPassphrase,
-    })
-      .addOperation(
-        this.contract.call("set_admin", new Address(newAdmin).toScVal())
-      )
-      .setTimeout(30)
-      .build();
-
-    const simResult = await this.rpc.simulateTransaction(tx);
-    if (SorobanRpc.Api.isSimulationError(simResult)) {
-      throw parseContractError(simResult.error);
-    }
-
-    return SorobanRpc.assembleTransaction(tx, simResult).build().toXDR();
+    const account = await this.getAccount();
+    return this.simulateWithRetry(buildTx(account), buildTx);
   }
 
   // ── claim ────────────────────────────────────────────────────────────────────
@@ -164,22 +203,17 @@ export class EscrowClient {
    * Builds a `claim` transaction envelope ready to be signed and submitted.
    */
   async buildClaim(): Promise<string> {
-    const account = await this.rpc.getAccount(this.opts.sourcePublicKey);
+    const buildTx = (account: Awaited<ReturnType<typeof this.getAccount>>) =>
+      new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.opts.networkPassphrase,
+      })
+        .addOperation(this.contract.call("claim"))
+        .setTimeout(VALIDITY_WINDOW_SEC)
+        .build();
 
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: this.opts.networkPassphrase,
-    })
-      .addOperation(this.contract.call("claim"))
-      .setTimeout(30)
-      .build();
-
-    const simResult = await this.rpc.simulateTransaction(tx);
-    if (SorobanRpc.Api.isSimulationError(simResult)) {
-      throw parseContractError(simResult.error);
-    }
-
-    return SorobanRpc.assembleTransaction(tx, simResult).build().toXDR();
+    const account = await this.getAccount();
+    return this.simulateWithRetry(buildTx(account), buildTx);
   }
 
   // ── get_state ────────────────────────────────────────────────────────────────
@@ -189,17 +223,25 @@ export class EscrowClient {
    * This is a read-only call — no transaction is submitted.
    */
   async getState(): Promise<EscrowState> {
-    const account = await this.rpc.getAccount(this.opts.sourcePublicKey);
+    const buildTx = (account: Awaited<ReturnType<typeof this.getAccount>>) =>
+      new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.opts.networkPassphrase,
+      })
+        .addOperation(this.contract.call("get_state"))
+        .setTimeout(VALIDITY_WINDOW_SEC)
+        .build();
 
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: this.opts.networkPassphrase,
-    })
-      .addOperation(this.contract.call("get_state"))
-      .setTimeout(30)
-      .build();
+    const account = await this.getAccount();
+    let tx = buildTx(account);
+    let simResult = await this.rpc.simulateTransaction(tx);
 
-    const simResult = await this.rpc.simulateTransaction(tx);
+    if (SorobanRpc.Api.isSimulationError(simResult) && isSeqError(simResult.error)) {
+      const freshAccount = await this.getAccount();
+      tx = buildTx(freshAccount);
+      simResult = await this.rpc.simulateTransaction(tx);
+    }
+
     if (SorobanRpc.Api.isSimulationError(simResult)) {
       throw parseContractError(simResult.error);
     }
