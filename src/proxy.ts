@@ -6,10 +6,18 @@ export function proxy(request: NextRequest) {
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
   const cspHeader = buildCspHeader(nonce);
 
+  // CSP_REPORT_ONLY=true switches to Content-Security-Policy-Report-Only so
+  // violations are logged without blocking — use this before enforcing any
+  // changes to the CSP policy (see docs/security/csp-policy.md).
+  const cspHeaderName =
+    process.env.CSP_REPORT_ONLY === "true"
+      ? "Content-Security-Policy-Report-Only"
+      : "Content-Security-Policy";
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("x-correlation-id", correlationId);
-  requestHeaders.set("Content-Security-Policy", cspHeader);
+  requestHeaders.set(cspHeaderName, cspHeader);
 
   const response = NextResponse.next({
     request: {
@@ -17,7 +25,7 @@ export function proxy(request: NextRequest) {
     },
   });
 
-  response.headers.set("Content-Security-Policy", cspHeader);
+  response.headers.set(cspHeaderName, cspHeader);
   response.headers.set("x-correlation-id", correlationId);
 
   return response;
