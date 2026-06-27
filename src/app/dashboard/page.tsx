@@ -1,10 +1,13 @@
 "use client";
 
+import { GiftCardSkeleton } from "@/components/gift/GiftCardSkeleton";
+import { OnboardingWrapper } from "@/components/onboarding/OnboardingWrapper";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { GiftCard } from "@/components/gift/GiftCard";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import styles from "./page.module.css";
 import type { ApiResponse } from "@/types";
 import type { GiftPageOffset } from "@/server/services/gift.service";
@@ -56,7 +59,12 @@ export default function DashboardPage() {
     return (
       <div className={styles.page}>
         <div className="container">
-          <p>Loading gifts…</p>
+          <div className={styles.header}>
+            <h1 className={styles.title}>Your Gifts</h1>
+          </div>
+          <div className={styles.grid}>
+            <GiftCardSkeleton count={6} />
+          </div>
         </div>
       </div>
     );
@@ -83,6 +91,7 @@ export default function DashboardPage() {
 
   return (
     <div className={styles.page}>
+      <OnboardingWrapper />
       <div className="container">
         <div className={styles.header}>
           <h1 className={styles.title}>Your Gifts</h1>
@@ -135,11 +144,14 @@ export default function DashboardPage() {
         ) : (
           <>
             <p className={styles.count}>
-              Showing {(page - 1) * DEFAULT_LIMIT + 1}–{Math.min(page * DEFAULT_LIMIT, total)} of {total} gifts
+              Showing {(page - 1) * DEFAULT_LIMIT + 1}–{Math.min(page * DEFAULT_LIMIT, total)} of{" "}
+              {total} gifts
             </p>
             <div className={styles.grid}>
               {gifts.map((gift) => (
-                <GiftCard key={gift.id} gift={gift} perspective="sender" />
+                <ErrorBoundary key={gift.id} name={`GiftCard:${gift.id}`}>
+                  <GiftCard gift={gift} perspective="sender" />
+                </ErrorBoundary>
               ))}
             </div>
             <div className={styles.loadMore}>
@@ -150,7 +162,9 @@ export default function DashboardPage() {
               >
                 Previous
               </button>
-              <span>Page {page} of {totalPages}</span>
+              <span>
+                Page {page} of {totalPages}
+              </span>
               <button
                 className="btn btn--secondary"
                 onClick={() => setPage((p) => p + 1)}

@@ -16,9 +16,25 @@ state are preserved — only the executable code changes.
 `upgrade`. Any other caller will receive an authorization error.
 
 **Event emitted:**
+
 ```
 topic:  ("upgraded",)
 data:   (old_wasm_hash, new_wasm_hash, timestamp)
+```
+
+### Migration helper
+
+The contract now exposes a `migrate()` entrypoint for upgrade paths that
+introduce breaking storage layout changes. After calling `upgrade()` on the
+contract, run `migrate()` to initialize new storage keys and mark the current
+storage schema version.
+
+```bash
+stellar contract invoke \
+  --network testnet \
+  --source <ADMIN_SECRET_KEY> \
+  --id <CONTRACT_ID> \
+  -- migrate
 ```
 
 ### Changing the Admin
@@ -44,12 +60,14 @@ data:   (old_admin, new_admin, timestamp)
 ### Step-by-step: upgrading a deployed contract
 
 1. **Build the new WASM:**
+
    ```bash
    npm run contract:build
    # Output: contracts/target/wasm32-unknown-unknown/release/lumigift_escrow.wasm
    ```
 
 2. **Upload the new WASM to the network (get the hash):**
+
    ```bash
    stellar contract upload \
      --network testnet \
@@ -59,6 +77,7 @@ data:   (old_admin, new_admin, timestamp)
    ```
 
 3. **Call `upgrade` on the existing contract:**
+
    ```bash
    stellar contract invoke \
      --network testnet \

@@ -1,5 +1,9 @@
 import { getRedisClient } from "@/lib/redis";
 import { serverConfig } from "@/server/config";
+import { serviceLogger } from "@/lib/logger";
+import pool from "@/lib/db";
+
+const logger = serviceLogger("exchange-rate");
 
 const CACHE_KEY = "rate:NGN:USDC";
 const CACHE_TTL_SEC = 300; // 5 minutes
@@ -12,12 +16,41 @@ const MAX_SLIPPAGE_PERCENT = 1;
 export interface ExchangeRateResult {
   ngnPerUsdc: number;
   stale: boolean;
-  source: "cache" | "horizon" | "fallback";
+  source: "cache" | "horizon" | "database" | "fallback";
+  cachedAt?: number;
 }
 
 interface CachedRate {
   rate: number;
   timestamp: number;
+}
+
+async function saveRateToDb(rate: number, source: string): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO exchange_rates (rate, source) VALUES ($1, $2)`,
+      [rate, source]
+    );
+  } catch (err) {
+    logger.warn("Failed to save rate to DB", { err, rate, source });
+  }
+}
+
+async function getLastKnownRateFromDb(): Promise<{ rate: number; cachedAt: number } | null> {
+  try {
+    const result = await pool.query(
+      `SELECT rate, created_at FROM exchange_rates ORDER BY created_at DESC LIMIT 1`
+    );
+    if (result.rows.length > 0) {
+      return {
+        rate: parseFloat(result.rows[0].rate),
+        cachedAt: new Date(result.rows[0].created_at).getTime()
+      };
+    }
+  } catch (err) {
+    logger.warn("Failed to get last known rate from DB", { err });
+  }
+  return null;
 }
 
 /**
@@ -43,10 +76,11 @@ async function refreshRate(): Promise<number> {
     const redis = await getRedisClient();
     const data: CachedRate = { rate, timestamp: Date.now() };
     await redis.set(CACHE_KEY, JSON.stringify(data), { EX: STALE_TTL_SEC });
-    console.log("[exchange-rate] refreshed and cached", { rate });
+    await saveRateToDb(rate, "horizon");
+    logger.info("Refreshed and cached rate", { rate });
     return rate;
   } catch (err) {
-    console.error("[exchange-rate] background refresh failed", err);
+    logger.error("Background refresh failed", { err });
     throw err;
   }
 }
@@ -64,24 +98,30 @@ export async function getExchangeRate(): Promise<ExchangeRateResult> {
       const ageSec = (Date.now() - timestamp) / 1000;
 
       if (ageSec < CACHE_TTL_SEC) {
-        console.log("[exchange-rate] cache hit (fresh)", { ageSec });
-        return { ngnPerUsdc: rate, stale: false, source: "cache" };
+        logger.debug("Cache hit (fresh)", { ageSec });
+        return { ngnPerUsdc: rate, stale: false, source: "cache", cachedAt: timestamp };
       }
 
-      console.log("[exchange-rate] cache hit (stale), refreshing in background", { ageSec });
+      logger.debug("Cache hit (stale), refreshing in background", { ageSec });
       refreshRate().catch(() => {}); // fire and forget
-      return { ngnPerUsdc: rate, stale: true, source: "cache" };
+      return { ngnPerUsdc: rate, stale: true, source: "cache", cachedAt: timestamp };
     } catch (err) {
-      console.error("[exchange-rate] failed to parse cache", err);
+      logger.error("Failed to parse cache", { err });
     }
   }
 
-  console.log("[exchange-rate] cache miss, fetching synchronously");
+  logger.info("Cache miss, fetching synchronously");
   try {
     const rate = await refreshRate();
-    return { ngnPerUsdc: rate, stale: false, source: "horizon" };
+    return { ngnPerUsdc: rate, stale: false, source: "horizon", cachedAt: Date.now() };
   } catch (err) {
-    console.error("[exchange-rate] Horizon unreachable and no cache available", err);
+    logger.warn("Horizon unreachable, checking DB for last known rate", { err });
+    const dbRate = await getLastKnownRateFromDb();
+    if (dbRate) {
+      logger.warn("Using fallback rate from DB", { rate: dbRate.rate, cachedAt: dbRate.cachedAt });
+      return { ngnPerUsdc: dbRate.rate, stale: true, source: "database", cachedAt: dbRate.cachedAt };
+    }
+    logger.warn("No DB fallback, using hardcoded fallback rate", { rate: FALLBACK_RATE });
     return { ngnPerUsdc: FALLBACK_RATE, stale: true, source: "fallback" };
   }
 }
@@ -122,7 +162,7 @@ export async function validateSlippage(
 
   const lockedRate = parseFloat(lockedStr);
   const { ngnPerUsdc: currentRate } = await getExchangeRate();
-  const deviation = Math.abs(currentRate - lockedRate) / lockedRate * 100;
+  const deviation = (Math.abs(currentRate - lockedRate) / lockedRate) * 100;
 
   if (deviation > MAX_SLIPPAGE_PERCENT) {
     return {

@@ -24,6 +24,7 @@ export const POST = withErrorHandler(withCsrf(async (req: NextRequest) => {
 
   const gift = await getGiftById(validation.data.giftId);
   if (!gift) {
+    console.error(`[claim] Gift not found: ${validation.data.giftId}`);
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Gift not found" },
       { status: 404 }
@@ -49,10 +50,10 @@ export const POST = withErrorHandler(withCsrf(async (req: NextRequest) => {
     }
   }
 
-  const { txHash } = await claimGift(gift, validation.data.recipientStellarKey);
+  const { jobId } = await claimGift(gift, validation.data.recipientStellarKey);
 
-  return NextResponse.json<ApiResponse<{ txHash: string }>>({
+  return NextResponse.json<ApiResponse<{ jobId: string }>>({
     success: true,
-    data: { txHash },
+    data: { jobId },
   });
 }));

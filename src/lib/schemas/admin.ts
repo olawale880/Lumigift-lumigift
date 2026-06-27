@@ -16,6 +16,9 @@ export const auditEventTypeSchema = z.enum([
   "gift_claimed",
   "gift_unlocked",
   "gift_expired",
+  "gift_deleted",
+  "gift_funded",
+  "gift_refunded",
   "payment_received",
   "payment_failed",
   "payment_refunded",
@@ -48,17 +51,17 @@ export const auditLogsQuerySchema = z.object({
     })
     .transform((v) => (v !== undefined ? new Date(v) : undefined)),
 
+  page: z
+    .string()
+    .optional()
+    .transform((v) => (v !== undefined ? parseInt(v, 10) : 1))
+    .pipe(z.number().int().min(1, "page must be ≥ 1")),
+
   limit: z
     .string()
     .optional()
     .transform((v) => (v !== undefined ? parseInt(v, 10) : 50))
-    .pipe(z.number().int().min(1).max(200, "limit must be ≤ 200")),
-
-  offset: z
-    .string()
-    .optional()
-    .transform((v) => (v !== undefined ? parseInt(v, 10) : 0))
-    .pipe(z.number().int().min(0, "offset must be ≥ 0")),
+    .pipe(z.number().int().min(1).max(100, "limit must be ≤ 100")),
 });
 
 export type AuditLogsQuery = z.infer<typeof auditLogsQuerySchema>;

@@ -2,12 +2,16 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import styles from "./page.module.css";
 import { HeroCTA } from "@/components/ab-testing/HeroCTA";
+import { getPlatformStats } from "@/server/services/gift.service";
 
 export const metadata: Metadata = {
   title: "Lumigift — Time-Locked Cash Gifts on Stellar",
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const stats = await getPlatformStats();
+  const showStats = stats.totalGiftsSent > 0;
+
   return (
     <>
       {/* Hero */}
@@ -20,9 +24,8 @@ export default function HomePage() {
             <span className={styles.highlight}>on a surprise date</span>
           </h1>
           <p className={styles.subheadline}>
-            Send money that stays completely hidden until the perfect moment.
-            Birthdays, anniversaries, Valentine&apos;s Day — make every gift
-            unforgettable.
+            Send money that stays completely hidden until the perfect moment. Birthdays,
+            anniversaries, Valentine&apos;s Day — make every gift unforgettable.
           </p>
           <div className={styles.cta}>
             <HeroCTA />
@@ -30,6 +33,17 @@ export default function HomePage() {
               How it works
             </Link>
           </div>
+          {showStats && (
+            <div className={styles.socialProof} aria-label="Platform statistics">
+              <span>
+                <strong>{stats.totalGiftsSent.toLocaleString()}+</strong> gifts sent
+              </span>
+              <span className={styles.socialProofDivider} aria-hidden="true">·</span>
+              <span>
+                <strong>₦{(stats.totalValueNgn / 1_000_000).toFixed(1)}M+</strong> gifted
+              </span>
+            </div>
+          )}
         </div>
       </section>
 
