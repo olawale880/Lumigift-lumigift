@@ -20,6 +20,8 @@ interface AuditLogQueryResponse {
     metadata: Record<string, unknown> | null;
   }>;
   total: number;
+  page: number;
+  pages: number;
 }
 
 export const GET = withErrorHandler(async (req: NextRequest) => {
@@ -41,7 +43,7 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   );
   if (!validation.success) return validation.errorResponse;
 
-  const { userId, giftId, eventType, startDate, endDate, limit, offset } = validation.data;
+  const { userId, giftId, eventType, startDate, endDate, page, limit } = validation.data;
 
   const result = await queryAuditLogs({
     userId,
@@ -49,8 +51,8 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     eventType: eventType as AuditEventType | undefined,
     startDate,
     endDate,
+    page,
     limit,
-    offset,
   });
 
   return NextResponse.json<ApiResponse<AuditLogQueryResponse>>({

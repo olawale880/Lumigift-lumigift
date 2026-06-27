@@ -4,8 +4,8 @@ import { adminExpireGift } from "@/server/services/admin.service";
 import type { ApiResponse, Gift } from "@/types";
 
 export const POST = withErrorHandler(
-  withAdmin(async (_req: NextRequest, context: unknown) => {
-    const { params } = context as { params: { id: string } };
+  withAdmin(async (_req: NextRequest, context: any) => {
+    const params = await context.params;
     const gift = await adminExpireGift(params.id);
 
     if (!gift) {

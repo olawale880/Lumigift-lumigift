@@ -16,12 +16,15 @@
 Lumigift is a full-stack gifting platform that enables users to send cash gifts that remain completely hidden until a predetermined unlock date and time. By using the Stellar blockchain, Lumigift transforms digital money transfers into memorable experiences filled with mystery and anticipation.
 
 **Who is it for?**
+
 - Nigerians sending to Nigerians for birthdays, anniversaries, and holidays where surprise is key
-- Valentine's Day, graduations, and surprise celebrations where the *timing* of the gift is as important as the gift itself
+- Valentine's Day, graduations, and surprise celebrations where the _timing_ of the gift is as important as the gift itself
 
 ---
 
 ## Architecture
+
+[View Architecture Decision Records (ADRs)](docs/adr/README.md)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -47,16 +50,16 @@ Lumigift is a full-stack gifting platform that enables users to send cash gifts 
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 14 (App Router), TypeScript, Vanilla CSS |
-| Backend | Next.js Route Handlers, server services layer |
-| Blockchain | Stellar, Soroban smart contracts (Rust) |
-| Stablecoin | USDC on Stellar |
-| Payments | Paystack (NGN), Stripe (international) |
-| SMS/OTP | Termii |
-| Database | PostgreSQL |
-| Cache/Queue | Redis |
+| Layer       | Technology                                       |
+| ----------- | ------------------------------------------------ |
+| Frontend    | Next.js 14 (App Router), TypeScript, Vanilla CSS |
+| Backend     | Next.js Route Handlers, server services layer    |
+| Blockchain  | Stellar, Soroban smart contracts (Rust)          |
+| Stablecoin  | USDC on Stellar                                  |
+| Payments    | Paystack (NGN), Stripe (international)           |
+| SMS/OTP     | Termii                                           |
+| Database    | PostgreSQL                                       |
+| Cache/Queue | Redis                                            |
 
 ---
 
@@ -128,6 +131,7 @@ docker-compose up
 ```
 
 **What's included:**
+
 - ✅ Next.js app running on port 3000
 - ✅ PostgreSQL database on port 5432 (auto-initialized with migrations)
 - ✅ Redis cache/queue on port 6379
@@ -157,6 +161,7 @@ docker-compose -f docker-compose.dev.yml up
 ```
 
 **Production vs Development:**
+
 - `docker-compose.yml` - Production build with multi-stage optimization
 - `docker-compose.dev.yml` - Development mode with hot reload and volume mounts
 
@@ -199,9 +204,21 @@ npm run contract:build
 # Run Rust tests
 npm run contract:test
 
-# Deploy to testnet
+# Deploy to testnet (idempotent — skips if already deployed)
 STELLAR_NETWORK=testnet npm run contract:deploy
+
+# Verify the deployed contract
+STELLAR_NETWORK=testnet npm run contract:verify
 ```
+
+### Deployed Contract Addresses
+
+| Network | Contract ID |
+|---------|-------------|
+| **Testnet** | [`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCN4`](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCN4) |
+| **Mainnet** | _not yet deployed_ |
+
+See [docs/ops/contract-deployment.md](docs/ops/contract-deployment.md) for the full deployment guide.
 
 ---
 

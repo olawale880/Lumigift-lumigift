@@ -47,7 +47,7 @@ function makeRequest(body: object, signature?: string | null) {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("POST /api/payments (Paystack webhook)", () => {
-  let POST: (req: NextRequest) => Promise<Response>;
+  let POST: (_req: NextRequest) => Promise<Response>;
 
   beforeEach(async () => {
     jest.resetModules();
