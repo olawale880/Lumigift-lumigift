@@ -30,8 +30,7 @@ export function proxy(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = `/api/v1/${match[1]}`;
     const res = NextResponse.redirect(url, { status: 308 });
-    res.headers.set("Deprecation", "true");
-    res.headers.set("Link", `<${url.pathname}>; rel="successor-version"`);
+    res.headers.set("Deprecation", "true");    res.headers.set("Sunset", "Sat, 27 Sep 2026 00:00:00 GMT");    res.headers.set("Link", `<${url.pathname}>; rel="successor-version"`);
     return res;
   }
 
