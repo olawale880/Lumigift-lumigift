@@ -73,6 +73,17 @@ export function useCsrf() {
         }
       }
 
+      // If the token expired (401), invalidate and retry once with a fresh token
+      if (res.status === 401) {
+        invalidateCsrfToken();
+        tokenRef.current = null;
+        const freshToken = await fetchCsrfToken();
+        tokenRef.current = freshToken;
+        const retryHeaders = new Headers(init.headers);
+        retryHeaders.set("x-csrf-token", freshToken);
+        return fetch(input, { ...init, headers: retryHeaders, credentials: "same-origin" });
+      }
+
       return res;
     },
     []
