@@ -6,12 +6,12 @@
     "no-restricted-syntax": [
       "error",
       {
-        "selector": "TaggedTemplateExpression[tag.name='sql'] TemplateLiteral[expressions.length>0]",
-        "message": "SQL injection risk: do not use template literal expressions in sql-tagged strings. Use parameterized query placeholders ($1, $2, ...) and pass values as a separate array instead."
+        "selector": "TaggedTemplateExpression[tag.name='sql']",
+        "message": "Use parameterized queries (pool.query(sql, [params])) instead of tagged template SQL literals to prevent SQL injection."
       },
       {
-        "selector": "TaggedTemplateExpression[tag.property.name='query'] TemplateLiteral[expressions.length>0]",
-        "message": "SQL injection risk: do not interpolate values into db.query template strings. Use parameterized placeholders."
+        "selector": "CallExpression[callee.property.name='query'] > TemplateLiteral:first-child",
+        "message": "Avoid template literals as the first argument to pool.query(). Use a plain string with $1/$2 placeholders and a params array to prevent SQL injection."
       }
     ]
   }

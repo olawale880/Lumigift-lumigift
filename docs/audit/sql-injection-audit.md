@@ -1,70 +1,71 @@
-# SQL Injection Audit
+# SQL Injection Audit — Issue #410
 
-**Date:** 2026-06-26  
-**Scope:** `src/server/services/`, `src/lib/db.ts` (if present)  
-**Auditor:** unixfundz
+**Date:** 2026-06-01  
+**Auditor:** Automated static analysis + manual review  
+**Status:** ✅ No vulnerabilities found
 
----
+## Scope
 
-## Summary
+All files in `src/` and `scripts/` that call `pool.query()` or `client.query()` were reviewed for raw string interpolation of user-supplied values in SQL statements.
 
-All files in scope were audited for string interpolation in SQL queries. No raw SQL queries exist in the current codebase — the data layer uses an in-memory `Map` store pending PostgreSQL migration.
+## Methodology
 
-**Result: No SQL injection vulnerabilities found.**
+1. Searched all `pool.query(` and `client.query(` call sites using static analysis.
+2. Verified each call uses parameterized placeholders (`$1`, `$2`, …) for user-supplied values.
+3. Confirmed no template literals concatenate user input directly into SQL strings.
+4. Reviewed dynamic WHERE clause construction in `audit.service.ts` — confirmed only column names (not user values) are interpolated; all values are parameterized.
 
----
+## Findings
 
-## Files Audited
+| File | Query | Parameterized? | Notes |
+|------|-------|---------------|-------|
+| `src/lib/auth.ts` | `SELECT 1 FROM known_devices WHERE user_id = $1 AND fingerprint = $2` | ✅ Yes | |
+| `src/lib/auth.ts` | `INSERT INTO known_devices (user_id, fingerprint) VALUES ($1, $2)` | ✅ Yes | |
+| `src/lib/auth.ts` | `UPDATE known_devices SET last_seen_at = NOW() WHERE user_id = $1 AND fingerprint = $2` | ✅ Yes | |
+| `src/lib/auth.ts` | `SELECT id, phone, name FROM users WHERE phone = $1` | ✅ Yes | |
+| `src/app/api/v1/users/route.ts` | `SELECT 1 FROM users WHERE phone = $1 LIMIT 1` | ✅ Yes | |
+| `src/app/api/v1/users/me/route.ts` | Delegates to `user-deletion.service.ts` | ✅ Yes | |
+| `src/app/api/v1/auth/register/route.ts` | `SELECT 1 FROM users WHERE phone = $1 LIMIT 1` | ✅ Yes | |
+| `src/app/api/v1/auth/register/route.ts` | `INSERT INTO users (id, phone, display_name) VALUES ($1, $2, $3)` | ✅ Yes | |
+| `src/app/api/v1/auth/report-login/route.ts` | `INSERT INTO suspicious_login_reports (user_id, fingerprint) VALUES ($1, $2)` | ✅ Yes | |
+| `src/server/services/gift.service.ts` | `SELECT display_name FROM users WHERE id = $1` | ✅ Yes | |
+| `src/server/services/invitation.service.ts` | All queries | ✅ Yes | |
+| `src/server/services/audit.service.ts` | Dynamic WHERE clause | ✅ Yes | Column names only interpolated; all values use `$N` params |
+| `src/server/services/fraud.service.ts` | All queries | ✅ Yes | |
+| `src/server/services/scheduler.service.ts` | All queries | ✅ Yes | |
+| `src/server/services/user-deletion.service.ts` | All queries | ✅ Yes | |
+| `scripts/seed-test-db.ts` | DDL + DML statements | ✅ N/A / Yes | Static schema; seed data uses `$N` params |
 
-| File | SQL Queries | String Interpolation | Status |
-|------|-------------|----------------------|--------|
-| `src/server/services/gift.service.ts` | None (in-memory Map) | N/A | ✅ Clean |
-| `src/server/services/claim.service.ts` | None | N/A | ✅ Clean |
-| `src/server/services/scheduler.service.ts` | Comment only (TODO) | None | ✅ Clean |
-| `src/server/middleware/index.ts` | None | N/A | ✅ Clean |
-| `src/lib/db.ts` | File does not exist yet | N/A | ⏳ Pending migration |
+## Dynamic WHERE Clause Pattern (audit.service.ts)
 
-The only SQL text in the codebase is a comment in `scheduler.service.ts`:
-```ts
-// TODO: replace with DB query: SELECT * FROM gifts WHERE status='locked' AND unlock_at <= now
-```
-This is not executed code and poses no risk.
-
----
-
-## ESLint Rule Added
-
-`.eslintrc.json` now includes `no-restricted-syntax` rules that flag:
-
-1. **Template literals inside `sql`-tagged strings** — catches the pattern `sql\`SELECT ... ${userInput}\``
-2. **Template literals inside `db.query(...)` template strings** — catches `db.query\`... ${value}\``
-
-Any future violation produces an ESLint error:
-> SQL injection risk: do not use template literal expressions in sql-tagged strings. Use parameterized query placeholders ($1, $2, ...) and pass values as a separate array instead.
-
----
-
-## Parameterized Query Standard
-
-Once `gift.service.ts` is migrated to PostgreSQL, all queries **must** follow this pattern:
+The `queryAuditLogs` function builds a dynamic WHERE clause by appending fixed column name strings (`user_id`, `gift_id`, etc.) to a conditions array. **User-supplied values are never interpolated** — they are always passed as `$N` parameters. This pattern is safe.
 
 ```ts
-// ✅ Correct — parameterized
-const result = await db.query(
-  'SELECT * FROM gifts WHERE id = $1 AND sender_id = $2',
-  [giftId, senderId]
-);
-
-// ❌ Forbidden — string interpolation
-const result = await db.query(
-  `SELECT * FROM gifts WHERE id = '${giftId}'`  // ESLint error
-);
+// Safe: column names are hardcoded, values use $N params
+conditions.push(`user_id = $${paramIndex++}`);
+params.push(query.userId);
 ```
 
----
+## Automated Prevention
 
-## Next Steps
+An ESLint rule (`no-restricted-syntax`) in `.eslintrc.json` flags:
+1. Tagged template SQL literals (`sql\`...\``)
+2. Template literals as the first argument to `.query()` calls
 
-- [ ] When `gift.service.ts` PostgreSQL migration lands, re-run this audit
-- [ ] Add `pg` or `postgres` client with strict typing (`@types/pg`)
-- [ ] Consider adding `eslint-plugin-security` for broader injection detection
+This rule runs on every `npm run lint` and in CI on every PR.
+
+## PR Review Checklist
+
+The PR template (`.github/PULL_REQUEST_TEMPLATE.md`) now includes a mandatory SQL injection check item:
+> Any new database queries use parameterized placeholders (`$1`, `$2`, …) — no string interpolation of user input in SQL.
+
+## Conclusion
+
+**No SQL injection vulnerabilities found.** All database queries consistently use the `pg` driver's parameterized query API. The ESLint rule and PR checklist provide ongoing automated and manual prevention.
+
+## Recommendations
+
+1. Maintain the parameterized query pattern for all future database calls.
+2. Run `npm run lint` in CI to enforce the ESLint SQL injection rule on every PR.
+3. Consider adopting a query builder (e.g., Kysely) in the future to make parameterization the only possible path.
+4. For staging environment scans, run `sqlmap` against the API endpoints as part of the security testing pipeline.
