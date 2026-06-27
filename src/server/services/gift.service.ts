@@ -1,4 +1,6 @@
-import { randomUUID, createHash } from "crypto";
+import { randomUUID } from "crypto";
+import { hashPhone, detectPhoneHashCollision } from "@/lib/phone";
+import { serviceLogger } from "@/lib/logger";
 import pool from "@/lib/db";
 import type { Gift, GiftStatus } from "@/types";
 import type { CreateGiftInput } from "@/types/schemas";
@@ -28,10 +30,6 @@ export async function ngnToUsdc(ngn: number): Promise<string> {
   return (ngn / ngnPerUsdc).toFixed(7);
 }
 
-/** Hash a phone number for storage. Plaintext is never persisted. */
-export function hashPhone(phone: string): string {
-  return createHash("sha256").update(phone).digest("hex");
-}
 
 // ─── In-memory store (replace with DB in production) ─────────────────────────
 export const gifts = new Map<string, Gift>();
@@ -71,6 +69,15 @@ export async function createGift(
   const id = randomUUID();
   const amountUsdc = await ngnToUsdc(input.amountNgn);
   const recipientPhoneHash = hashPhone(input.recipientPhone);
+
+  // ── Phone hash collision detection ─────────────────────────────────────────
+  const log = serviceLogger("gift");
+  try {
+    await detectPhoneHashCollision(recipientPhoneHash, pool);
+  } catch (err) {
+    log.error({ err, recipientPhoneHash: recipientPhoneHash.slice(0, 8) }, "Phone hash collision detected — gift rejected");
+    throw err;
+  }
 
   // Sanitize message content to prevent stored XSS
   const sanitizedMessage = input.message ? stripHtmlTags(input.message) : undefined;

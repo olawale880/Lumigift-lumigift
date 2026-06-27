@@ -1,4 +1,4 @@
-import { normalizePhone } from "@/lib/phone";
+import { normalizePhone, hashPhone, detectPhoneHashCollision } from "@/lib/phone";
 
 describe("normalizePhone", () => {
   // ─── Nigerian formats that must all resolve to the same E.164 ───────────────
@@ -14,6 +14,30 @@ describe("normalizePhone", () => {
   ];
 
   test.each(validNigerianInputs)("normalizes %s → %s", (input, expected) => {
+    expect(normalizePhone(input)).toBe(expected);
+  });
+
+  // ─── All Nigerian network prefix groups (070x, 080x, 081x, 090x) ───────────
+  const networkPrefixInputs: [string, string][] = [
+    // 070x — Glo
+    ["07012345678", "+2347012345678"],
+    ["07023456789", "+2347023456789"],
+    // 080x — MTN / Airtel
+    ["08012345678", "+2348012345678"],
+    ["08023456789", "+2348023456789"],
+    // 081x — MTN
+    ["08112345678", "+2348112345678"],
+    ["08123456789", "+2348123456789"],
+    // 090x — Airtel / 9mobile / Glo
+    ["09012345678", "+2349012345678"],
+    ["09023456789", "+2349023456789"],
+    // International format equivalents
+    ["+2347012345678", "+2347012345678"],
+    ["+2348112345678", "+2348112345678"],
+    ["+2349012345678", "+2349012345678"],
+  ];
+
+  test.each(networkPrefixInputs)("NGN prefix — normalizes %s → %s", (input, expected) => {
     expect(normalizePhone(input)).toBe(expected);
   });
 
@@ -64,5 +88,51 @@ describe("normalizePhone", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.recipientPhone).toBe(canonical);
+  });
+});
+
+describe("hashPhone", () => {
+  it("returns a 64-char hex string (SHA-256)", () => {
+    const h = hashPhone("+2348012345678");
+    expect(h).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("is deterministic — same input, same hash", () => {
+    expect(hashPhone("+2348012345678")).toBe(hashPhone("+2348012345678"));
+  });
+
+  it("produces different hashes for different numbers", () => {
+    expect(hashPhone("+2348012345678")).not.toBe(hashPhone("+2349012345678"));
+  });
+});
+
+describe("detectPhoneHashCollision", () => {
+  function makeDb(count: number) {
+    return {
+      query: jest.fn().mockResolvedValue({ rows: [{ count: String(count) }] }),
+    };
+  }
+
+  it("returns true when exactly one user matches", async () => {
+    const db = makeDb(1);
+    await expect(detectPhoneHashCollision("abc123", db)).resolves.toBe(true);
+  });
+
+  it("returns false when zero users match (unregistered)", async () => {
+    const db = makeDb(0);
+    await expect(detectPhoneHashCollision("abc123", db)).resolves.toBe(false);
+  });
+
+  it("throws PHONE_HASH_COLLISION when multiple users share the hash", async () => {
+    const db = makeDb(2);
+    await expect(detectPhoneHashCollision("abc123", db)).rejects.toThrow(
+      "PHONE_HASH_COLLISION"
+    );
+  });
+
+  it("passes the hash as a parameterised query arg", async () => {
+    const db = makeDb(1);
+    await detectPhoneHashCollision("deadbeef", db);
+    expect(db.query).toHaveBeenCalledWith(expect.any(String), ["deadbeef"]);
   });
 });
