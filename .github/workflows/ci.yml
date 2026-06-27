@@ -76,7 +76,7 @@ jobs:
           comment: true
 
   integration-test:
-    name: Integration Tests (DB)
+    name: Integration Tests (DB + Redis)
     runs-on: ubuntu-latest
     needs: [lint-and-type-check]
     services:
@@ -93,8 +93,19 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       TEST_DATABASE_URL: postgresql://lumigift:lumigift@localhost:5432/lumigift_test
+      TEST_REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
