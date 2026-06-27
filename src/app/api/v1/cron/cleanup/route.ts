@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processCleanup } from "@/server/services/scheduler.service";
+import { verifyCronAuth } from "@/lib/cron-auth";
 import type { ApiResponse } from "@/types";
 
 /**
@@ -7,13 +8,8 @@ import type { ApiResponse } from "@/types";
  * Handles data retention policies (e.g., purging audit logs older than 2 years).
  */
 export const GET = async (req: NextRequest) => {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const authErr = verifyCronAuth(req);
+  if (authErr) return authErr;
 
   const result = await processCleanup();
   return NextResponse.json<ApiResponse<{ message: string; details: any }>>({
