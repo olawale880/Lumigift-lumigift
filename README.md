@@ -245,3 +245,4 @@ We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before 
 ## License
 
 [MIT](LICENSE) © 2024 Lumigift
+.
